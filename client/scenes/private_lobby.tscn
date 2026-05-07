@@ -1,0 +1,90 @@
+[gd_scene format=3 uid="uid://caa1rihl5b6jt"]
+
+[ext_resource type="Script" uid="uid://bnk7ww7e8pyyt" path="res://scripts/private_lobby.gd" id="1_pl001"]
+
+[node name="PrivateLobby" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_pl001")
+
+[node name="Background" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.08, 0.12, 1)
+
+[node name="VBox" type="VBoxContainer" parent="."]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -280.0
+offset_top = -330.0
+offset_right = 280.0
+offset_bottom = 330.0
+grow_horizontal = 2
+grow_vertical = 2
+alignment = 1
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="VBox"]
+text = "Private Room"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 40
+
+[node name="CreateSection" type="VBoxContainer" parent="VBox"]
+theme_override_constants/separation = 10
+
+[node name="CreateSectionLabel" type="Label" parent="VBox/CreateSection"]
+text = "Create a Room"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 24
+
+[node name="CreateButton" type="Button" parent="VBox/CreateSection"]
+custom_minimum_size = Vector2(0, 50)
+text = "Create Room"
+theme_override_font_sizes/font_size = 24
+
+[node name="CodeDisplay" type="Label" parent="VBox/CreateSection"]
+text = ""
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 32
+theme_override_colors/font_color = Color(0.3, 0.9, 0.4, 1)
+
+[node name="HSeparator" type="HSeparator" parent="VBox"]
+
+[node name="JoinSection" type="VBoxContainer" parent="VBox"]
+theme_override_constants/separation = 10
+
+[node name="JoinSectionLabel" type="Label" parent="VBox/JoinSection"]
+text = "Join a Room"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 24
+
+[node name="CodeInput" type="LineEdit" parent="VBox/JoinSection"]
+placeholder_text = "ENTER CODE"
+max_length = 6
+custom_minimum_size = Vector2(0, 50)
+alignment = 1
+theme_override_font_sizes/font_size = 24
+
+[node name="JoinButton" type="Button" parent="VBox/JoinSection"]
+custom_minimum_size = Vector2(0, 50)
+text = "Join Room"
+theme_override_font_sizes/font_size = 24
+
+[node name="ErrorLabel" type="Label" parent="VBox"]
+text = ""
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 20
+theme_override_colors/font_color = Color(0.9, 0.3, 0.3, 1)
+
+[node name="BackButton" type="Button" parent="VBox"]
+custom_minimum_size = Vector2(0, 50)
+text = "Back"
+theme_override_font_sizes/font_size = 24

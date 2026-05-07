@@ -1,4 +1,4 @@
-extends Node2D
+extends Control
 # scripts/game.gd
 # Existing node tree (renamed root):
 # Game (Node2D)

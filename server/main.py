@@ -25,6 +25,7 @@ app.add_middleware(
 )
 
 ROUNDS_TO_WIN = 3
+MAX_INACTIVE_ROUNDS = 3
 MIN_DELAY_S = 2.0
 MAX_DELAY_S = 6.0
 HUMAN_FLOOR_MS = 100
@@ -52,6 +53,7 @@ class Match:
     room_code: Optional[str] = None
     round_num: int = 0
     round_log: list[dict] = field(default_factory=list)
+    inactive_rounds: int = 0
 
 
 class Lobby:
@@ -62,6 +64,9 @@ class Lobby:
 
     async def quickplay_join(self, player: Player) -> Optional[Match]:
         async with self.lock:
+            for queued in self.quickplay_queue:
+                if queued.player_id == player.player_id:
+                    return None  # already queued, ignore duplicate
             if self.quickplay_queue:
                 opponent = self.quickplay_queue.pop(0)
                 return Match(match_id=str(uuid.uuid4())[:12], p1=opponent, p2=player, mode="ranked")
@@ -173,18 +178,32 @@ async def run_match(match: Match) -> None:
         })
 
     winner: Optional[Player] = None
+    loser: Optional[Player] = None
     try:
         while match.p1.wins < ROUNDS_TO_WIN and match.p2.wins < ROUNDS_TO_WIN:
             match.round_num += 1
-            await run_round(match)
-        winner = match.p1 if match.p1.wins > match.p2.wins else match.p2
-        loser = match.p2 if winner is match.p1 else match.p1
-        print(f"[MATCH] Ended {match.match_id}: {winner.username} {winner.wins}-{loser.wins}")
-        for p, did_win in [(winner, True), (loser, False)]:
+            round_winner = await run_round(match)
+            if round_winner is None:
+                match.inactive_rounds += 1
+                if match.inactive_rounds >= MAX_INACTIVE_ROUNDS:
+                    print(f"[MATCH] Abandoning {match.match_id}: {MAX_INACTIVE_ROUNDS} consecutive inactive rounds")
+                    break
+            else:
+                match.inactive_rounds = 0
+        if match.p1.wins > match.p2.wins:
+            winner, loser = match.p1, match.p2
+        elif match.p2.wins > match.p1.wins:
+            winner, loser = match.p2, match.p1
+        final_score = f"{winner.wins}-{loser.wins}" if winner else f"{match.p1.wins}-{match.p2.wins}"
+        if winner:
+            print(f"[MATCH] Ended {match.match_id}: {winner.username} {winner.wins}-{loser.wins}")
+        else:
+            print(f"[MATCH] Abandoned {match.match_id}: {match.p1.wins}-{match.p2.wins} (inactive)")
+        for p in [match.p1, match.p2]:
             await safe_send(p.websocket, {
                 "type": "match_end",
-                "you_won": did_win,
-                "final_score": f"{winner.wins}-{loser.wins}",
+                "you_won": p is winner,
+                "final_score": final_score,
             })
     finally:
         try:
@@ -196,7 +215,7 @@ async def run_match(match: Match) -> None:
         player_to_match.pop(match.p2.player_id, None)
 
 
-async def run_round(match: Match) -> None:
+async def run_round(match: Match) -> Optional[Player]:
     p1, p2 = match.p1, match.p2
     p1.click_received_us = None; p2.click_received_us = None
     p1.client_reported_rt_ms = None; p2.client_reported_rt_ms = None
@@ -266,6 +285,7 @@ async def run_round(match: Match) -> None:
         })
 
     await asyncio.sleep(2.0)
+    return round_winner
 
 
 @app.websocket("/ws/play")

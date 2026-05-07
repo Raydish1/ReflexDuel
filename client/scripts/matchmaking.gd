@@ -14,6 +14,7 @@ func _ready() -> void:
 	dots_timer.timeout.connect(_animate)
 	Net.match_start.connect(_on_match_start)
 	Net.cancelled.connect(_on_cancelled)
+	Net.quickplay()
 
 
 func _exit_tree() -> void:

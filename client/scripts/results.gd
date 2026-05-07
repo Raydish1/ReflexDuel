@@ -21,7 +21,6 @@ func _ready() -> void:
 
 
 func _on_play_again() -> void:
-	Net.quickplay()
 	get_tree().change_scene_to_file("res://scenes/matchmaking.tscn")
 
 
