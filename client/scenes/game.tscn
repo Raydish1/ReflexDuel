@@ -1,0 +1,45 @@
+[gd_scene format=3 uid="uid://6swmeylws5cp"]
+
+[ext_resource type="Script" uid="uid://0e81o4h2wxv8" path="res://scripts/game.gd" id="1_uwrxv"]
+
+[node name="ReactionTest" type="Node2D" unique_id=809865876]
+script = ExtResource("1_uwrxv")
+
+[node name="Background" type="ColorRect" parent="." unique_id=754913021]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.3491902, 0.3491902, 0.38109186, 1)
+
+[node name="Stimulus" type="ColorRect" parent="." unique_id=1043267690]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = 1.0
+offset_top = 2.0
+offset_right = 401.0
+offset_bottom = 402.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.3491902, 0.3491902, 0.38109186, 1)
+
+[node name="StatusLabel" type="Label" parent="." unique_id=178278608]
+offset_left = 66.0
+offset_top = 3.0
+offset_right = 337.0
+offset_bottom = 70.0
+theme_override_font_sizes/font_size = 48
+text = "StatusLabel"
+horizontal_alignment = 1
+
+[node name="RTLabel" type="Label" parent="." unique_id=201420528]
+offset_left = 96.0
+offset_top = 332.0
+offset_right = 279.0
+offset_bottom = 399.0
+theme_override_font_sizes/font_size = 48
+text = "RTLabel"

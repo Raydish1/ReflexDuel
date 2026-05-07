@@ -1,0 +1,15 @@
+{
+    "sqltools.connections": [
+        {
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "localhost",
+            "port": 5432,
+            "driver": "PostgreSQL",
+            "name": "reflexduel",
+            "username": "postgres",
+            "database": "reflexduel"
+        }
+    ],
+    "godotTools.editorPath.godot4": "c:\\Users\\Rayha\\Downloads\\Godot_v4.6.2-stable_win64.exe\\Godot_v4.6.2-stable_win64.exe"
+}
