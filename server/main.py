@@ -56,6 +56,16 @@ class Match:
     inactive_rounds: int = 0
 
 
+@dataclass
+class RematchSession:
+    session_id: str
+    p1: Player
+    p2: Player
+    mode: str
+    room_code: Optional[str] = None
+    votes: set = field(default_factory=set)
+
+
 class Lobby:
     def __init__(self) -> None:
         self.quickplay_queue: list[Player] = []
@@ -105,6 +115,8 @@ class Lobby:
 lobby = Lobby()
 active_matches: dict[str, Match] = {}
 player_to_match: dict[str, str] = {}
+rematch_sessions: dict[str, RematchSession] = {}
+player_to_rematch: dict[str, str] = {}
 
 
 def now_us() -> int:
@@ -159,7 +171,21 @@ async def persist_match(match: Match, winner: Optional[Player]) -> None:
         print(f"[DB] Wrote match {match.match_id} with {len(match.round_log)} rounds")
 
 
+async def start_rematch(session: RematchSession) -> None:
+    await asyncio.sleep(1.0)
+    match = Match(
+        match_id=str(uuid.uuid4())[:12],
+        p1=session.p1,
+        p2=session.p2,
+        mode=session.mode,
+        room_code=session.room_code,
+    )
+    asyncio.create_task(run_match(match))
+
+
 async def run_match(match: Match) -> None:
+    match.p1.wins = 0
+    match.p2.wins = 0
     print(f"[MATCH] Starting {match.match_id}: {match.p1.username} vs {match.p2.username} ({match.mode})")
     active_matches[match.match_id] = match
     player_to_match[match.p1.player_id] = match.match_id
@@ -205,6 +231,15 @@ async def run_match(match: Match) -> None:
                 "you_won": p is winner,
                 "final_score": final_score,
             })
+        rsid = str(uuid.uuid4())[:12]
+        rs = RematchSession(
+            session_id=rsid, p1=match.p1, p2=match.p2,
+            mode=match.mode, room_code=match.room_code,
+        )
+        rematch_sessions[rsid] = rs
+        player_to_rematch[match.p1.player_id] = rsid
+        player_to_rematch[match.p2.player_id] = rsid
+        print(f"[REMATCH] Session {rsid} open for {match.p1.username} vs {match.p2.username}")
     finally:
         try:
             await persist_match(match, winner)
@@ -335,6 +370,33 @@ async def ws_play(websocket: WebSocket) -> None:
                 await lobby.cancel_room(player)
                 await safe_send(websocket, {"type": "cancelled"})
 
+            elif mtype == "rematch_vote":
+                rsid = player_to_rematch.get(player.player_id)
+                rs = rematch_sessions.get(rsid) if rsid else None
+                if rs is None:
+                    continue
+                rs.votes.add(player.player_id)
+                for p in [rs.p1, rs.p2]:
+                    await safe_send(p.websocket, {"type": "rematch_status", "votes": len(rs.votes)})
+                if len(rs.votes) == 2:
+                    rematch_sessions.pop(rsid, None)
+                    player_to_rematch.pop(rs.p1.player_id, None)
+                    player_to_rematch.pop(rs.p2.player_id, None)
+                    for p in [rs.p1, rs.p2]:
+                        await safe_send(p.websocket, {"type": "rematch_go"})
+                    print(f"[REMATCH] Both voted — starting {rs.p1.username} vs {rs.p2.username}")
+                    asyncio.create_task(start_rematch(rs))
+
+            elif mtype == "rematch_cancel":
+                rsid = player_to_rematch.pop(player.player_id, None)
+                rs = rematch_sessions.pop(rsid, None) if rsid else None
+                if rs is None:
+                    continue
+                partner = rs.p2 if rs.p1.player_id == player.player_id else rs.p1
+                player_to_rematch.pop(partner.player_id, None)
+                await safe_send(partner.websocket, {"type": "opponent_left"})
+                print(f"[REMATCH] {player.username} cancelled — notified {partner.username}")
+
             elif mtype == "click":
                 match_id = player_to_match.get(player.player_id)
                 if not match_id: continue
@@ -350,6 +412,12 @@ async def ws_play(websocket: WebSocket) -> None:
         print(f"[WS] Disconnected: {player.player_id}")
         await lobby.quickplay_leave(player)
         await lobby.cancel_room(player)
+        rsid = player_to_rematch.pop(player.player_id, None)
+        rs = rematch_sessions.pop(rsid, None) if rsid else None
+        if rs is not None:
+            partner = rs.p2 if rs.p1.player_id == player.player_id else rs.p1
+            player_to_rematch.pop(partner.player_id, None)
+            await safe_send(partner.websocket, {"type": "opponent_left"})
 
 
 @app.get("/health")

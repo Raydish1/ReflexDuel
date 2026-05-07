@@ -24,13 +24,13 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -250.0
-offset_top = -220.0
+offset_top = -240.0
 offset_right = 250.0
-offset_bottom = 220.0
+offset_bottom = 240.0
 grow_horizontal = 2
 grow_vertical = 2
 alignment = 1
-theme_override_constants/separation = 24
+theme_override_constants/separation = 20
 
 [node name="ResultLabel" type="Label" parent="VBox"]
 text = "YOU WON"
@@ -42,10 +42,16 @@ text = "vs ? — final: "
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 24
 
-[node name="PlayAgainButton" type="Button" parent="VBox"]
+[node name="RematchButton" type="Button" parent="VBox"]
 custom_minimum_size = Vector2(0, 50)
-text = "Play Again"
+text = "Rematch (0/2)"
 theme_override_font_sizes/font_size = 24
+
+[node name="RematchStatus" type="Label" parent="VBox"]
+text = ""
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.65, 0.65, 0.7, 1)
 
 [node name="MenuButton" type="Button" parent="VBox"]
 custom_minimum_size = Vector2(0, 50)

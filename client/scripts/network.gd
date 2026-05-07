@@ -16,6 +16,9 @@ signal stimulus(server_time_us: int)
 signal round_result(data: Dictionary)
 signal match_end(data: Dictionary)
 signal connection_lost()
+signal rematch_status(votes: int)
+signal rematch_go()
+signal opponent_left()
 
 var socket: WebSocketPeer
 var player_id: String = ""
@@ -80,6 +83,12 @@ func _dispatch(msg: Dictionary) -> void:
 			round_result.emit(msg)
 		"match_end":
 			match_end.emit(msg)
+		"rematch_status":
+			rematch_status.emit(msg.get("votes", 0))
+		"rematch_go":
+			rematch_go.emit()
+		"opponent_left":
+			opponent_left.emit()
 
 
 func send(msg: Dictionary) -> void:
@@ -116,3 +125,11 @@ func send_click(client_rt_ms: float, pre_click: bool) -> void:
 		"client_rt_ms": client_rt_ms,
 		"pre_click": pre_click,
 	})
+
+
+func send_rematch_vote() -> void:
+	send({"type": "rematch_vote"})
+
+
+func send_rematch_cancel() -> void:
+	send({"type": "rematch_cancel"})
