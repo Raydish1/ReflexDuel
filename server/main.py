@@ -16,13 +16,20 @@ from typing import Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+from sqlalchemy import text
+
 from db import AsyncSessionLocal
-from models import Match as MatchRow, Player as PlayerRow, Round as RoundRow
+from models import Match as MatchRow, Player as PlayerRow, Round as RoundRow, CalibrationRound as CalibrationRoundRow
 
 app = FastAPI(title="ReflexDuel")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 ROUNDS_TO_WIN = 3
 MAX_INACTIVE_ROUNDS = 3
@@ -42,6 +49,7 @@ class Player:
     click_received_us: Optional[int] = None
     client_reported_rt_ms: Optional[float] = None
     pre_clicked: bool = False
+    ready: bool = False
 
 
 @dataclass
@@ -120,7 +128,7 @@ player_to_rematch: dict[str, str] = {}
 
 
 def now_us() -> int:
-    return time.monotonic_ns() // 1000
+    return time.perf_counter_ns() // 1000
 
 
 async def safe_send(ws: WebSocket, msg: dict) -> bool:
@@ -132,12 +140,94 @@ async def safe_send(ws: WebSocket, msg: dict) -> bool:
 
 
 async def ensure_player_row(player_id: str, username: str) -> None:
+    try:
+        async with AsyncSessionLocal() as session:
+            existing = await session.get(PlayerRow, player_id)
+            if existing is None:
+                print(f"[DB] Creating player row: {player_id} ({username})")
+                session.add(PlayerRow(id=player_id, username=username))
+                await session.commit()
+    except Exception as e:
+        print(f"[DB] ensure_player_row failed for {player_id}: {e}")
+
+
+_VALID_STATS = {"avg_rt", "best_match_rt", "wins", "winrate"}
+
+async def fetch_leaderboard(stat: str) -> list[dict]:
+    queries = {
+        "avg_rt": text("""
+            WITH player_rts AS (
+                SELECT m.p1_id AS player_id, r.p1_server_rt_ms AS rt_ms
+                FROM rounds r JOIN matches m ON r.match_id = m.id
+                WHERE r.p1_server_rt_ms IS NOT NULL AND NOT r.p1_pre_click
+                UNION ALL
+                SELECT m.p2_id AS player_id, r.p2_server_rt_ms AS rt_ms
+                FROM rounds r JOIN matches m ON r.match_id = m.id
+                WHERE r.p2_server_rt_ms IS NOT NULL AND NOT r.p2_pre_click
+            )
+            SELECT p.username, ROUND(AVG(pr.rt_ms)::numeric, 1) AS value
+            FROM player_rts pr JOIN players p ON pr.player_id = p.id
+            GROUP BY p.id, p.username
+            HAVING COUNT(*) >= 3
+            ORDER BY value ASC
+            LIMIT 10
+        """),
+        "best_match_rt": text("""
+            WITH match_avgs AS (
+                SELECT m.p1_id AS player_id, AVG(r.p1_server_rt_ms) AS avg_rt
+                FROM rounds r JOIN matches m ON r.match_id = m.id
+                WHERE r.p1_server_rt_ms IS NOT NULL AND NOT r.p1_pre_click
+                GROUP BY m.id, m.p1_id
+                UNION ALL
+                SELECT m.p2_id AS player_id, AVG(r.p2_server_rt_ms) AS avg_rt
+                FROM rounds r JOIN matches m ON r.match_id = m.id
+                WHERE r.p2_server_rt_ms IS NOT NULL AND NOT r.p2_pre_click
+                GROUP BY m.id, m.p2_id
+            )
+            SELECT p.username, ROUND(MIN(ma.avg_rt)::numeric, 1) AS value
+            FROM match_avgs ma JOIN players p ON ma.player_id = p.id
+            GROUP BY p.id, p.username
+            ORDER BY value ASC
+            LIMIT 10
+        """),
+        "wins": text("""
+            SELECT p.username, COUNT(*) AS value
+            FROM matches m
+            JOIN players p ON m.winner_id = p.id
+            GROUP BY p.id, p.username
+            ORDER BY value DESC
+            LIMIT 10
+        """),
+        "winrate": text("""
+            WITH player_matches AS (
+                SELECT p1_id AS player_id, winner_id FROM matches
+                UNION ALL
+                SELECT p2_id AS player_id, winner_id FROM matches
+            )
+            SELECT p.username,
+                   ROUND(100.0 * COUNT(*) FILTER (WHERE pm.winner_id = pm.player_id) / COUNT(*), 1) AS value
+            FROM player_matches pm
+            JOIN players p ON pm.player_id = p.id
+            GROUP BY p.id, p.username
+            HAVING COUNT(*) >= 2
+            ORDER BY value DESC
+            LIMIT 10
+        """),
+    }
     async with AsyncSessionLocal() as session:
-        existing = await session.get(PlayerRow, player_id)
-        if existing is None:
-            print(f"[DB] Creating player row: {player_id} ({username})")
-            session.add(PlayerRow(id=player_id, username=username))
-            await session.commit()
+        result = await session.execute(queries[stat])
+        return [{"username": r.username, "value": float(r.value)} for r in result.fetchall()]
+
+
+async def save_calibration(player: Player, rt_ms: float, side: str) -> None:
+    await ensure_player_row(player.player_id, player.username)
+    async with AsyncSessionLocal() as session:
+        session.add(CalibrationRoundRow(
+            player_id=player.player_id,
+            rt_ms=rt_ms,
+            side=side,
+        ))
+        await session.commit()
 
 
 async def persist_match(match: Match, winner: Optional[Player]) -> None:
@@ -312,14 +402,25 @@ async def run_round(match: Match) -> Optional[Player]:
         await safe_send(p.websocket, {
             "type": "round_result",
             "round_num": match.round_num,
-            "your_rt_ms": rt_ms(p),
-            "opponent_rt_ms": rt_ms(opp),
+            "your_rt_ms": p.client_reported_rt_ms,
+            "opponent_rt_ms": opp.client_reported_rt_ms,
             "you_won_round": round_winner is p,
             "your_score": p.wins,
             "opponent_score": opp.wins,
         })
 
-    await asyncio.sleep(2.0)
+    # Skip ready-wait on the decisive final round so match_end arrives immediately.
+    if p1.wins >= ROUNDS_TO_WIN or p2.wins >= ROUNDS_TO_WIN:
+        return round_winner
+
+    p1.ready = False
+    p2.ready = False
+    ready_deadline = now_us() + 5_000_000  # 5 s in µs
+    while not (p1.ready and p2.ready):
+        if now_us() > ready_deadline:
+            break
+        await asyncio.sleep(0.01)
+
     return round_winner
 
 
@@ -407,6 +508,31 @@ async def ws_play(websocket: WebSocket) -> None:
                     target.click_received_us = t_received
                     target.client_reported_rt_ms = msg.get("client_rt_ms")
                     target.pre_clicked = bool(msg.get("pre_click", False))
+
+            elif mtype == "ready_up":
+                match_id = player_to_match.get(player.player_id)
+                if not match_id: continue
+                m = active_matches.get(match_id)
+                if not m: continue
+                target = m.p1 if m.p1.player_id == player.player_id else m.p2
+                target.ready = True
+
+            elif mtype == "calibration_click":
+                rt_ms = msg.get("rt_ms")
+                side = msg.get("side", "unknown")
+                if rt_ms is not None and 50.0 <= float(rt_ms) <= 2000.0:
+                    asyncio.create_task(save_calibration(player, float(rt_ms), side))
+
+            elif mtype == "leaderboard_request":
+                stat = msg.get("stat", "avg_rt")
+                if stat not in _VALID_STATS:
+                    stat = "avg_rt"
+                try:
+                    rows = await fetch_leaderboard(stat)
+                except Exception as e:
+                    print(f"[LEADERBOARD] Query failed: {e}")
+                    rows = []
+                await safe_send(websocket, {"type": "leaderboard_data", "stat": stat, "rows": rows})
 
     except WebSocketDisconnect:
         print(f"[WS] Disconnected: {player.player_id}")

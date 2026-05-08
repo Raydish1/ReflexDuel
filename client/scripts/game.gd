@@ -1,28 +1,30 @@
 extends Control
 # scripts/game.gd
-# Existing node tree (renamed root):
-# Game (Node2D)
-# ├── Background (ColorRect)
-# ├── Stimulus (ColorRect)
-# ├── StatusLabel (Label)
-# └── RTLabel (Label)
 
-enum State { WAITING_MATCH, WAITING, STIMULUS, ROUND_RESULT, MATCH_END }
+enum State { WAITING_MATCH, WAITING, STIMULUS, READY_UP, MATCH_END }
 var state: State = State.WAITING_MATCH
 
 var t_stimulus_us: int = 0
 var my_score: int = 0
 var opp_score: int = 0
 var opponent_username: String = "?"
+var _countdown: int = 5
+var _readied: bool = false
 
 @onready var background: ColorRect = $Background
 @onready var stimulus: ColorRect = $Stimulus
 @onready var status_label: Label = $StatusLabel
 @onready var rt_label: Label = $RTLabel
+@onready var ready_label: Label = $ReadyLabel
+@onready var countdown_label: Label = $CountdownLabel
+@onready var countdown_timer: Timer = $CountdownTimer
 
 
 func _ready() -> void:
 	_set_idle("Match starting...")
+	ready_label.visible = false
+	countdown_label.visible = false
+	countdown_timer.timeout.connect(_on_countdown_tick)
 	Net.match_start.connect(_on_match_start)
 	Net.round_prepare.connect(_on_round_prepare)
 	Net.stimulus.connect(_on_stimulus)
@@ -52,6 +54,9 @@ func _on_match_start(data: Dictionary) -> void:
 
 func _on_round_prepare(round_num: int) -> void:
 	state = State.WAITING
+	countdown_timer.stop()
+	ready_label.visible = false
+	countdown_label.visible = false
 	stimulus.color = Color(0.2, 0.2, 0.2)
 	status_label.text = "Round %d - wait for green..." % round_num
 	rt_label.text = "%d - %d" % [my_score, opp_score]
@@ -65,7 +70,6 @@ func _on_stimulus(_server_time_us: int) -> void:
 
 
 func _on_round_result(data: Dictionary) -> void:
-	state = State.ROUND_RESULT
 	my_score = data.get("your_score", my_score)
 	opp_score = data.get("opponent_score", opp_score)
 	var won: bool = data.get("you_won_round", false)
@@ -77,10 +81,34 @@ func _on_round_result(data: Dictionary) -> void:
 		_fmt(data.get("opponent_rt_ms")),
 		my_score, opp_score
 	]
+	_enter_ready_up()
+
+
+func _enter_ready_up() -> void:
+	state = State.READY_UP
+	_readied = false
+	_countdown = 5
+	ready_label.text = "Click to ready up"
+	ready_label.visible = true
+	countdown_label.text = "5"
+	countdown_label.visible = true
+	countdown_timer.start()
+
+
+func _on_countdown_tick() -> void:
+	_countdown -= 1
+	if _countdown <= 0:
+		countdown_timer.stop()
+		countdown_label.text = "0"
+		if not _readied:
+			ready_label.text = "Starting..."
+	else:
+		countdown_label.text = str(_countdown)
 
 
 func _on_match_end(data: Dictionary) -> void:
 	state = State.MATCH_END
+	countdown_timer.stop()
 	Net.last_match_result = {
 		"won": data.get("you_won", false),
 		"final_score": data.get("final_score", ""),
@@ -112,3 +140,8 @@ func _input(event: InputEvent) -> void:
 		State.WAITING:
 			Net.send_click(0.0, true)
 			status_label.text = "Too early! Forfeit."
+		State.READY_UP:
+			if not _readied:
+				_readied = true
+				Net.send_ready_up()
+				ready_label.text = "Ready! Waiting for opponent..."

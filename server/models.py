@@ -115,3 +115,16 @@ class Round(Base):
     p2_pre_click: Mapped[bool] = mapped_column(Boolean, default=False)
 
     match: Mapped["Match"] = relationship("Match", back_populates="rounds")
+
+
+class CalibrationRound(Base):
+    """Solo training click from the main menu — pure client-side RT, used as latency baseline."""
+    __tablename__ = "calibration_rounds"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    player_id: Mapped[str] = mapped_column(ForeignKey("players.id"), nullable=False)
+    rt_ms: Mapped[float] = mapped_column(Float, nullable=False)
+    side: Mapped[str] = mapped_column(String(5), nullable=False)  # 'left' or 'right'
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

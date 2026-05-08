@@ -2,7 +2,13 @@ extends Node
 # Autoload singleton — registered as "Net" in Project Settings > Autoload.
 # Owns the WebSocket connection so scene changes don't drop it.
 
-const SERVER_URL := "ws://127.0.0.1:8000/ws/play"
+# In the editor: connects to your local server.
+# In exported builds: connects to production.
+# To test an exported build against your local server, temporarily swap the URL below.
+var SERVER_URL: String = (
+	"ws://127.0.0.1:8000/ws/play" if OS.has_feature("editor")
+	else "wss://reflexduel-server.fly.dev/ws/play"
+)
 
 # Signals — scenes connect to these to react to server events
 signal hello_received(player_id: String)
@@ -19,6 +25,7 @@ signal connection_lost()
 signal rematch_status(votes: int)
 signal rematch_go()
 signal opponent_left()
+signal leaderboard_data(data: Dictionary)
 
 var socket: WebSocketPeer
 var player_id: String = ""
@@ -89,6 +96,8 @@ func _dispatch(msg: Dictionary) -> void:
 			rematch_go.emit()
 		"opponent_left":
 			opponent_left.emit()
+		"leaderboard_data":
+			leaderboard_data.emit(msg)
 
 
 func send(msg: Dictionary) -> void:
@@ -98,9 +107,9 @@ func send(msg: Dictionary) -> void:
 	socket.send_text(JSON.stringify(msg))
 
 
-func set_username(name: String) -> void:
-	username = name
-	send({"type": "set_username", "username": name})
+func set_username(new_username: String) -> void:
+	username = new_username
+	send({"type": "set_username", "username": new_username})
 
 
 func quickplay() -> void:
@@ -133,3 +142,15 @@ func send_rematch_vote() -> void:
 
 func send_rematch_cancel() -> void:
 	send({"type": "rematch_cancel"})
+
+
+func send_ready_up() -> void:
+	send({"type": "ready_up"})
+
+
+func send_calibration(rt_ms: float, side: String) -> void:
+	send({"type": "calibration_click", "rt_ms": rt_ms, "side": side})
+
+
+func request_leaderboard(stat: String) -> void:
+	send({"type": "leaderboard_request", "stat": stat})
