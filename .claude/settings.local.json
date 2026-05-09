@@ -4,7 +4,11 @@
       "Bash(python -m alembic upgrade head)",
       "Bash(python -m alembic revision --autogenerate -m \"clean_schema_usernames\")",
       "PowerShell(cd \"c:\\\\Users\\\\Rayha\\\\Documents\\\\ReflexDuel\\\\ReflexDuel\\\\server\"; & \"$env:USERPROFILE\\\\.fly\\\\bin\\\\flyctl.exe\" deploy)",
-      "PowerShell(cd \"c:\\\\Users\\\\Rayha\\\\Documents\\\\ReflexDuel\\\\ReflexDuel\\\\server\"; $env:ALEMBIC_DATABASE_URL = \"postgresql+psycopg2://postgres.mjnmlhesztypcvofkwxj:xUb7tDbFM2lHek13@aws-1-us-east-2.pooler.supabase.com:5432/postgres\"; python -m alembic upgrade head 2>&1)"
+      "PowerShell(cd \"c:\\\\Users\\\\Rayha\\\\Documents\\\\ReflexDuel\\\\ReflexDuel\\\\server\"; $env:ALEMBIC_DATABASE_URL = \"postgresql+psycopg2://postgres.mjnmlhesztypcvofkwxj:xUb7tDbFM2lHek13@aws-1-us-east-2.pooler.supabase.com:5432/postgres\"; python -m alembic upgrade head 2>&1)",
+      "mcp__godot-ai__editor_screenshot",
+      "mcp__godot-ai__project_run",
+      "mcp__godot-ai__scene_get_hierarchy",
+      "mcp__godot-ai__filesystem_manage"
     ]
   }
 }
