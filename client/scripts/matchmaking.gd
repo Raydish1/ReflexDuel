@@ -14,7 +14,12 @@ func _ready() -> void:
 	dots_timer.timeout.connect(_animate)
 	Net.match_start.connect(_on_match_start)
 	Net.cancelled.connect(_on_cancelled)
-	Net.quickplay()
+	if Net.queue_mode == "practice":
+		status_label.text = "Practice — Finding opponent..."
+		Net.practice_quickplay()
+	else:
+		status_label.text = "Ranked — Finding opponent..."
+		Net.quickplay()
 
 
 func _exit_tree() -> void:
@@ -30,6 +35,13 @@ func _animate() -> void:
 
 
 func _on_match_start(_data: Dictionary) -> void:
+	dots_timer.stop()
+	cancel_btn.visible = false
+	dots_label.visible = false
+	status_label.add_theme_font_size_override("font_size", 48)
+	status_label.text = "Match Found!"
+	status_label.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4))
+	await get_tree().create_timer(1.0).timeout
 	get_tree().change_scene_to_file("res://scenes/game.tscn")
 
 

@@ -1,6 +1,7 @@
 """
 ReflexDuel - Phase 2.5 server.
 Quickplay queue + private rooms with codes + PostgreSQL persistence.
+Modes: ranked (latency-compensated server RT), practice (client-reported RT).
 """
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ from typing import Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from sqlalchemy import text
+from sqlalchemy import text, update
 
 from db import AsyncSessionLocal
 from models import Match as MatchRow, Player as PlayerRow, Round as RoundRow, CalibrationRound as CalibrationRoundRow
@@ -38,6 +39,10 @@ MAX_DELAY_S = 6.0
 HUMAN_FLOOR_MS = 100
 ROOM_CODE_CHARS = string.ascii_uppercase + string.digits
 ROOM_CODE_LEN = 6
+CLIENT_VERSION = "0.2.0"
+# Pong must arrive before any valid click (HUMAN_FLOOR_MS guarantees this).
+# 0.5s fallback timeout covers extreme packet loss.
+ROUND_PING_TIMEOUT_S = 0.5
 
 
 @dataclass
@@ -50,6 +55,18 @@ class Player:
     client_reported_rt_ms: Optional[float] = None
     pre_clicked: bool = False
     ready: bool = False
+    one_way_latency_ms: float = 0.0
+    pong_queue: asyncio.Queue = field(default_factory=asyncio.Queue)
+    # Client hardware (set once via client_info message)
+    platform: Optional[str] = None
+    screen_refresh_hz: Optional[float] = None
+    screen_resolution: Optional[str] = None
+    client_version: Optional[str] = None
+    # Per-round behavioral features (reset each round, set via click/click_info messages)
+    click_duration_ms: Optional[float] = None
+    mouse_distance_5s_px: Optional[float] = None
+    time_since_mouse_move_ms: Optional[float] = None
+    window_focused: Optional[bool] = None
 
 
 @dataclass
@@ -77,6 +94,7 @@ class RematchSession:
 class Lobby:
     def __init__(self) -> None:
         self.quickplay_queue: list[Player] = []
+        self.practice_queue: list[Player] = []
         self.private_rooms: dict[str, Player] = {}
         self.lock = asyncio.Lock()
 
@@ -84,7 +102,7 @@ class Lobby:
         async with self.lock:
             for queued in self.quickplay_queue:
                 if queued.player_id == player.player_id:
-                    return None  # already queued, ignore duplicate
+                    return None
             if self.quickplay_queue:
                 opponent = self.quickplay_queue.pop(0)
                 return Match(match_id=str(uuid.uuid4())[:12], p1=opponent, p2=player, mode="ranked")
@@ -95,6 +113,22 @@ class Lobby:
         async with self.lock:
             if player in self.quickplay_queue:
                 self.quickplay_queue.remove(player)
+
+    async def practice_join(self, player: Player) -> Optional[Match]:
+        async with self.lock:
+            for queued in self.practice_queue:
+                if queued.player_id == player.player_id:
+                    return None
+            if self.practice_queue:
+                opponent = self.practice_queue.pop(0)
+                return Match(match_id=str(uuid.uuid4())[:12], p1=opponent, p2=player, mode="practice")
+            self.practice_queue.append(player)
+            return None
+
+    async def practice_leave(self, player: Player) -> None:
+        async with self.lock:
+            if player in self.practice_queue:
+                self.practice_queue.remove(player)
 
     async def create_room(self, player: Player) -> str:
         async with self.lock:
@@ -151,19 +185,22 @@ async def ensure_player_row(player_id: str, username: str) -> None:
         print(f"[DB] ensure_player_row failed for {player_id}: {e}")
 
 
+
 _VALID_STATS = {"avg_rt", "best_match_rt", "wins", "winrate"}
 
 async def fetch_leaderboard(stat: str) -> list[dict]:
     queries = {
         "avg_rt": text("""
             WITH player_rts AS (
-                SELECT m.p1_id AS player_id, r.p1_server_rt_ms AS rt_ms
+                SELECT m.p1_id AS player_id, r.p1_server_rt_compensated_ms AS rt_ms
                 FROM rounds r JOIN matches m ON r.match_id = m.id
-                WHERE r.p1_server_rt_ms IS NOT NULL AND NOT r.p1_pre_click
+                WHERE r.p1_server_rt_compensated_ms IS NOT NULL AND NOT r.p1_pre_click
+                  AND m.mode != 'practice'
                 UNION ALL
-                SELECT m.p2_id AS player_id, r.p2_server_rt_ms AS rt_ms
+                SELECT m.p2_id AS player_id, r.p2_server_rt_compensated_ms AS rt_ms
                 FROM rounds r JOIN matches m ON r.match_id = m.id
-                WHERE r.p2_server_rt_ms IS NOT NULL AND NOT r.p2_pre_click
+                WHERE r.p2_server_rt_compensated_ms IS NOT NULL AND NOT r.p2_pre_click
+                  AND m.mode != 'practice'
             )
             SELECT p.username, ROUND(AVG(pr.rt_ms)::numeric, 1) AS value
             FROM player_rts pr JOIN players p ON pr.player_id = p.id
@@ -174,14 +211,16 @@ async def fetch_leaderboard(stat: str) -> list[dict]:
         """),
         "best_match_rt": text("""
             WITH match_avgs AS (
-                SELECT m.p1_id AS player_id, AVG(r.p1_server_rt_ms) AS avg_rt
+                SELECT m.p1_id AS player_id, AVG(r.p1_server_rt_compensated_ms) AS avg_rt
                 FROM rounds r JOIN matches m ON r.match_id = m.id
-                WHERE r.p1_server_rt_ms IS NOT NULL AND NOT r.p1_pre_click
+                WHERE r.p1_server_rt_compensated_ms IS NOT NULL AND NOT r.p1_pre_click
+                  AND m.mode != 'practice'
                 GROUP BY m.id, m.p1_id
                 UNION ALL
-                SELECT m.p2_id AS player_id, AVG(r.p2_server_rt_ms) AS avg_rt
+                SELECT m.p2_id AS player_id, AVG(r.p2_server_rt_compensated_ms) AS avg_rt
                 FROM rounds r JOIN matches m ON r.match_id = m.id
-                WHERE r.p2_server_rt_ms IS NOT NULL AND NOT r.p2_pre_click
+                WHERE r.p2_server_rt_compensated_ms IS NOT NULL AND NOT r.p2_pre_click
+                  AND m.mode != 'practice'
                 GROUP BY m.id, m.p2_id
             )
             SELECT p.username, ROUND(MIN(ma.avg_rt)::numeric, 1) AS value
@@ -194,15 +233,16 @@ async def fetch_leaderboard(stat: str) -> list[dict]:
             SELECT p.username, COUNT(*) AS value
             FROM matches m
             JOIN players p ON m.winner_id = p.id
+            WHERE m.mode != 'practice'
             GROUP BY p.id, p.username
             ORDER BY value DESC
             LIMIT 10
         """),
         "winrate": text("""
             WITH player_matches AS (
-                SELECT p1_id AS player_id, winner_id FROM matches
+                SELECT p1_id AS player_id, winner_id FROM matches WHERE mode != 'practice'
                 UNION ALL
-                SELECT p2_id AS player_id, winner_id FROM matches
+                SELECT p2_id AS player_id, winner_id FROM matches WHERE mode != 'practice'
             )
             SELECT p.username,
                    ROUND(100.0 * COUNT(*) FILTER (WHERE pm.winner_id = pm.player_id) / COUNT(*), 1) AS value
@@ -224,6 +264,7 @@ async def save_calibration(player: Player, rt_ms: float, side: str) -> None:
     async with AsyncSessionLocal() as session:
         session.add(CalibrationRoundRow(
             player_id=player.player_id,
+            username=player.username,
             rt_ms=rt_ms,
             side=side,
         ))
@@ -240,23 +281,61 @@ async def persist_match(match: Match, winner: Optional[Player]) -> None:
             winner_id=winner.player_id if winner else None,
             mode=match.mode, room_code=match.room_code,
             p1_final_score=match.p1.wins, p2_final_score=match.p2.wins,
+            p1_username=match.p1.username,
+            p2_username=match.p2.username,
+            p1_platform=match.p1.platform,
+            p2_platform=match.p2.platform,
+            p1_screen_refresh_hz=match.p1.screen_refresh_hz,
+            p2_screen_refresh_hz=match.p2.screen_refresh_hz,
+            p1_screen_resolution=match.p1.screen_resolution,
+            p2_screen_resolution=match.p2.screen_resolution,
+            p1_client_version=match.p1.client_version,
+            p2_client_version=match.p2.client_version,
         ))
         for r in match.round_log:
             session.add(RoundRow(
                 match_id=match.match_id,
                 round_num=r["round_num"],
+                p1_username=match.p1.username,
+                p2_username=match.p2.username,
                 t_stimulus_us=r["t_stimulus_us"],
                 delay_s=r["delay_s"],
                 p1_click_us=r["p1_click_us"],
                 p2_click_us=r["p2_click_us"],
-                p1_server_rt_ms=r["p1_rt_ms"],
-                p2_server_rt_ms=r["p2_rt_ms"],
                 p1_client_rt_ms=r["p1_client_rt_ms"],
                 p2_client_rt_ms=r["p2_client_rt_ms"],
+                p1_server_rt_raw_ms=r["p1_raw_rt_ms"],
+                p1_server_rt_compensated_ms=r["p1_compensated_rt_ms"],
+                p2_server_rt_raw_ms=r["p2_raw_rt_ms"],
+                p2_server_rt_compensated_ms=r["p2_compensated_rt_ms"],
                 winner_id=r["winner"],
                 p1_pre_click=r["p1_pre_click"],
                 p2_pre_click=r["p2_pre_click"],
+                p1_rtt_ms_round=r["p1_rtt_ms_round"],
+                p2_rtt_ms_round=r["p2_rtt_ms_round"],
+                p1_click_duration_ms=r["p1_click_duration_ms"],
+                p2_click_duration_ms=r["p2_click_duration_ms"],
+                p1_mouse_distance_5s_px=r["p1_mouse_distance_5s_px"],
+                p2_mouse_distance_5s_px=r["p2_mouse_distance_5s_px"],
+                p1_time_since_mouse_move_ms=r["p1_time_since_mouse_move_ms"],
+                p2_time_since_mouse_move_ms=r["p2_time_since_mouse_move_ms"],
+                p1_window_focused=r["p1_window_focused"],
+                p2_window_focused=r["p2_window_focused"],
             ))
+        p1_won = 1 if winner and winner.player_id == match.p1.player_id else 0
+        p2_won = 1 if winner and winner.player_id == match.p2.player_id else 0
+        await session.execute(
+            update(PlayerRow).where(PlayerRow.id == match.p1.player_id).values(
+                matches_played=PlayerRow.matches_played + 1,
+                matches_won=PlayerRow.matches_won + p1_won,
+            )
+        )
+        await session.execute(
+            update(PlayerRow).where(PlayerRow.id == match.p2.player_id).values(
+                matches_played=PlayerRow.matches_played + 1,
+                matches_won=PlayerRow.matches_won + p2_won,
+            )
+        )
         await session.commit()
         print(f"[DB] Wrote match {match.match_id} with {len(match.round_log)} rounds")
 
@@ -280,6 +359,9 @@ async def run_match(match: Match) -> None:
     active_matches[match.match_id] = match
     player_to_match[match.p1.player_id] = match.match_id
     player_to_match[match.p2.player_id] = match.match_id
+
+    match.p1.one_way_latency_ms = 0.0
+    match.p2.one_way_latency_ms = 0.0
 
     for p, opp in [(match.p1, match.p2), (match.p2, match.p1)]:
         await safe_send(p.websocket, {
@@ -320,6 +402,7 @@ async def run_match(match: Match) -> None:
                 "type": "match_end",
                 "you_won": p is winner,
                 "final_score": final_score,
+                "mode": match.mode,
             })
         rsid = str(uuid.uuid4())[:12]
         rs = RematchSession(
@@ -345,8 +428,14 @@ async def run_round(match: Match) -> Optional[Player]:
     p1.click_received_us = None; p2.click_received_us = None
     p1.client_reported_rt_ms = None; p2.client_reported_rt_ms = None
     p1.pre_clicked = False; p2.pre_clicked = False
+    p1.click_duration_ms = None; p2.click_duration_ms = None
+    p1.mouse_distance_5s_px = None; p2.mouse_distance_5s_px = None
+    p1.time_since_mouse_move_ms = None; p2.time_since_mouse_move_ms = None
+    p1.window_focused = None; p2.window_focused = None
 
     delay_s = random.uniform(MIN_DELAY_S, MAX_DELAY_S)
+    if match.round_num == 1:
+        delay_s += 2.0  # extra buffer for the "Name vs Name" intro overlay
 
     for p in (p1, p2):
         await safe_send(p.websocket, {"type": "round_prepare", "round_num": match.round_num})
@@ -355,34 +444,84 @@ async def run_round(match: Match) -> Optional[Player]:
 
     t_stimulus = now_us()
     fire = {"type": "stimulus", "server_time_us": t_stimulus}
-    await asyncio.gather(safe_send(p1.websocket, fire), safe_send(p2.websocket, fire))
+    # Ping fires with the stimulus. Pong is guaranteed to arrive before any valid
+    # click because the human reaction delay (≥ HUMAN_FLOOR_MS) always exceeds RTT.
+    ping_id = match.round_num
+    round_ping = {"type": "ping", "ping_id": ping_id, "server_time_us": t_stimulus}
+    await asyncio.gather(
+        safe_send(p1.websocket, fire),
+        safe_send(p2.websocket, fire),
+        safe_send(p1.websocket, round_ping),
+        safe_send(p2.websocket, round_ping),
+    )
 
     deadline = t_stimulus + 3_000_000
     while p1.click_received_us is None or p2.click_received_us is None:
         if now_us() > deadline: break
         await asyncio.sleep(0.005)
 
-    def rt_ms(p: Player) -> Optional[float]:
+    # Collect the pongs that arrived during the reaction window.
+    # If somehow the pong is missing (packet loss), fall back to last known latency.
+    async def _update_latency(player: Player) -> None:
+        try:
+            while True:
+                pong_msg, t_arrived = await asyncio.wait_for(
+                    player.pong_queue.get(), timeout=ROUND_PING_TIMEOUT_S
+                )
+                if pong_msg.get("ping_id") == ping_id:
+                    player.one_way_latency_ms = (t_arrived - t_stimulus) / 2000.0
+                    break
+                # stale pong from a previous round — discard and keep waiting
+        except asyncio.TimeoutError:
+            pass  # keep last known value
+
+    await asyncio.gather(_update_latency(p1), _update_latency(p2))
+
+    # Raw server-measured RT (network latency included).
+    def _raw(p: Player) -> Optional[float]:
         return None if p.click_received_us is None else (p.click_received_us - t_stimulus) / 1000.0
 
-    p1_rt, p2_rt = rt_ms(p1), rt_ms(p2)
+    p1_raw = _raw(p1)
+    p2_raw = _raw(p2)
+
+    # Compensated RT: subtract full RTT (2 × one-way latency) measured this round.
+    def _compensated(p: Player, raw: Optional[float]) -> Optional[float]:
+        return None if raw is None else raw - 2.0 * p.one_way_latency_ms
+
+    p1_compensated = _compensated(p1, p1_raw)
+    p2_compensated = _compensated(p2, p2_raw)
+
+    # Effective RT used for win determination depends on mode.
+    if match.mode == "practice":
+        p1_eff = p1.client_reported_rt_ms
+        p2_eff = p2.client_reported_rt_ms
+    else:
+        p1_eff = p1_compensated
+        p2_eff = p2_compensated
 
     def is_valid(p: Player, rt: Optional[float]) -> bool:
         return not p.pre_clicked and rt is not None and rt >= HUMAN_FLOOR_MS
 
-    p1_ok, p2_ok = is_valid(p1, p1_rt), is_valid(p2, p2_rt)
+    p1_ok, p2_ok = is_valid(p1, p1_eff), is_valid(p2, p2_eff)
     if p1_ok and p2_ok:
-        round_winner = p1 if p1_rt < p2_rt else p2
+        round_winner = p1 if p1_eff < p2_eff else p2
     elif p1_ok: round_winner = p1
     elif p2_ok: round_winner = p2
     else: round_winner = None
 
     if round_winner: round_winner.wins += 1
 
-    p1_rt_str = f"{p1_rt:.1f}" if p1_rt is not None else "—"
-    p2_rt_str = f"{p2_rt:.1f}" if p2_rt is not None else "—"
+    def _fmt(v: Optional[float]) -> str:
+        return f"{v:.1f}" if v is not None else "—"
+
     winner_name = round_winner.username if round_winner else "no-contest"
-    print(f"[ROUND {match.round_num}] {match.p1.username}={p1_rt_str}ms vs {match.p2.username}={p2_rt_str}ms -> {winner_name}")
+    mode_tag = "[PRACTICE]" if match.mode == "practice" else "[RANKED]"
+    print(
+        f"[ROUND {match.round_num}]{mode_tag} "
+        f"{p1.username}={_fmt(p1_eff)}ms(raw={_fmt(p1_raw)},rtt={p1.one_way_latency_ms*2:.1f}ms) vs "
+        f"{p2.username}={_fmt(p2_eff)}ms(raw={_fmt(p2_raw)},rtt={p2.one_way_latency_ms*2:.1f}ms) "
+        f"-> {winner_name}"
+    )
 
     match.round_log.append({
         "round_num": match.round_num,
@@ -390,12 +529,25 @@ async def run_round(match: Match) -> Optional[Player]:
         "delay_s": round(delay_s, 3),
         "p1_click_us": p1.click_received_us,
         "p2_click_us": p2.click_received_us,
-        "p1_rt_ms": p1_rt, "p2_rt_ms": p2_rt,
+        "p1_raw_rt_ms": p1_raw,
+        "p1_compensated_rt_ms": p1_compensated,
+        "p2_raw_rt_ms": p2_raw,
+        "p2_compensated_rt_ms": p2_compensated,
         "p1_client_rt_ms": p1.client_reported_rt_ms,
         "p2_client_rt_ms": p2.client_reported_rt_ms,
         "p1_pre_click": p1.pre_clicked,
         "p2_pre_click": p2.pre_clicked,
         "winner": round_winner.player_id if round_winner else None,
+        "p1_rtt_ms_round": round(p1.one_way_latency_ms * 2, 3),
+        "p2_rtt_ms_round": round(p2.one_way_latency_ms * 2, 3),
+        "p1_click_duration_ms": p1.click_duration_ms,
+        "p2_click_duration_ms": p2.click_duration_ms,
+        "p1_mouse_distance_5s_px": p1.mouse_distance_5s_px,
+        "p2_mouse_distance_5s_px": p2.mouse_distance_5s_px,
+        "p1_time_since_mouse_move_ms": p1.time_since_mouse_move_ms,
+        "p2_time_since_mouse_move_ms": p2.time_since_mouse_move_ms,
+        "p1_window_focused": p1.window_focused,
+        "p2_window_focused": p2.window_focused,
     })
 
     for p, opp in [(p1, p2), (p2, p1)]:
@@ -404,6 +556,7 @@ async def run_round(match: Match) -> Optional[Player]:
             "round_num": match.round_num,
             "your_rt_ms": p.client_reported_rt_ms,
             "opponent_rt_ms": opp.client_reported_rt_ms,
+            "opponent_pre_click": opp.pre_clicked,
             "you_won_round": round_winner is p,
             "your_score": p.wins,
             "opponent_score": opp.wins,
@@ -437,17 +590,29 @@ async def ws_play(websocket: WebSocket) -> None:
             t_received = now_us()
             mtype = msg.get("type")
 
-            if mtype == "set_username":
+            if mtype == "pong":
+                await player.pong_queue.put((msg, now_us()))
+
+            elif mtype == "set_username":
                 player.username = (msg.get("username") or "anon")[:32]
                 await ensure_player_row(player.player_id, player.username)
                 await safe_send(websocket, {"type": "username_set", "username": player.username})
 
             elif mtype == "quickplay":
                 await ensure_player_row(player.player_id, player.username)
-                print(f"[QUEUE] {player.username} ({player.player_id}) joined quickplay")
+                print(f"[QUEUE] {player.username} ({player.player_id}) joined ranked")
                 match = await lobby.quickplay_join(player)
                 if match is None:
-                    await safe_send(websocket, {"type": "queued", "mode": "quickplay"})
+                    await safe_send(websocket, {"type": "queued", "mode": "ranked"})
+                else:
+                    asyncio.create_task(run_match(match))
+
+            elif mtype == "practice_quickplay":
+                await ensure_player_row(player.player_id, player.username)
+                print(f"[QUEUE] {player.username} ({player.player_id}) joined practice")
+                match = await lobby.practice_join(player)
+                if match is None:
+                    await safe_send(websocket, {"type": "queued", "mode": "practice"})
                 else:
                     asyncio.create_task(run_match(match))
 
@@ -468,6 +633,7 @@ async def ws_play(websocket: WebSocket) -> None:
 
             elif mtype == "cancel_queue":
                 await lobby.quickplay_leave(player)
+                await lobby.practice_leave(player)
                 await lobby.cancel_room(player)
                 await safe_send(websocket, {"type": "cancelled"})
 
@@ -498,6 +664,16 @@ async def ws_play(websocket: WebSocket) -> None:
                 await safe_send(partner.websocket, {"type": "opponent_left"})
                 print(f"[REMATCH] {player.username} cancelled — notified {partner.username}")
 
+            elif mtype == "client_info":
+                player.platform = (msg.get("platform") or "unknown")[:16]
+                player.screen_refresh_hz = msg.get("screen_refresh_hz")
+                player.screen_resolution = (msg.get("screen_resolution") or "")[:16]
+                player.client_version = (msg.get("client_version") or "")[:16]
+
+            elif mtype == "click_info":
+                # Sent on mouseup after a click; attaches click_duration to the current round
+                player.click_duration_ms = msg.get("click_duration_ms")
+
             elif mtype == "click":
                 match_id = player_to_match.get(player.player_id)
                 if not match_id: continue
@@ -508,6 +684,14 @@ async def ws_play(websocket: WebSocket) -> None:
                     target.click_received_us = t_received
                     target.client_reported_rt_ms = msg.get("client_rt_ms")
                     target.pre_clicked = bool(msg.get("pre_click", False))
+                    target.mouse_distance_5s_px = msg.get("mouse_distance_5s_px")
+                    target.time_since_mouse_move_ms = msg.get("time_since_mouse_move_ms")
+                    target.window_focused = msg.get("window_focused")
+                    opponent = m.p2 if target is m.p1 else m.p1
+                    await safe_send(opponent.websocket, {
+                        "type": "opponent_clicked",
+                        "pre_click": target.pre_clicked,
+                    })
 
             elif mtype == "ready_up":
                 match_id = player_to_match.get(player.player_id)
@@ -537,6 +721,7 @@ async def ws_play(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         print(f"[WS] Disconnected: {player.player_id}")
         await lobby.quickplay_leave(player)
+        await lobby.practice_leave(player)
         await lobby.cancel_room(player)
         rsid = player_to_rematch.pop(player.player_id, None)
         rs = rematch_sessions.pop(rsid, None) if rsid else None
@@ -547,10 +732,11 @@ async def ws_play(websocket: WebSocket) -> None:
 
 
 @app.get("/health")
-async def health() -> dict:
+async def health_detail() -> dict:
     return {
         "status": "ok",
         "quickplay_queue": len(lobby.quickplay_queue),
+        "practice_queue": len(lobby.practice_queue),
         "private_rooms": len(lobby.private_rooms),
         "active_matches": len(active_matches),
     }

@@ -13,11 +13,28 @@ var _rematching := false
 func _ready() -> void:
 	var result: Dictionary = Net.last_match_result
 	var won: bool = result.get("won", false)
+	var mode: String = result.get("mode", "ranked")
+
 	result_label.text = "YOU WON" if won else "YOU LOST"
 	result_label.modulate = Color(0.3, 0.9, 0.4) if won else Color(0.9, 0.3, 0.3)
-	score_label.text = "vs %s   final: %s" % [
+
+	var mode_lbl := Label.new()
+	if mode == "practice":
+		mode_lbl.text = "PRACTICE MODE"
+		mode_lbl.modulate = Color(1.0, 0.65, 0.0)
+	else:
+		mode_lbl.text = "RANKED"
+		mode_lbl.modulate = Color(0.3, 0.75, 1.0)
+	mode_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mode_lbl.add_theme_font_size_override("font_size", 20)
+	$VBox.add_child(mode_lbl)
+	$VBox.move_child(mode_lbl, 0)
+
+	score_label.text = "%s  vs  %s   final: %d — %d" % [
+		Net.username,
 		result.get("opponent", "?"),
-		result.get("final_score", "")
+		result.get("my_score", 0),
+		result.get("opp_score", 0),
 	]
 	rematch_btn.pressed.connect(_on_rematch)
 	menu_btn.pressed.connect(_on_menu)

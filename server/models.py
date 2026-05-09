@@ -65,9 +65,19 @@ class Match(Base):
     p1_final_score: Mapped[int] = mapped_column(Integer, default=0)
     p2_final_score: Mapped[int] = mapped_column(Integer, default=0)
 
-    # Latency measured at match start (one-time RTT probe)
-    p1_rtt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
-    p2_rtt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Username snapshots at match time (display only — player.username can change)
+    p1_username: Mapped[str] = mapped_column(String(32), nullable=False, server_default="")
+    p2_username: Mapped[str] = mapped_column(String(32), nullable=False, server_default="")
+
+    # Client hardware environment (sent once via client_info message, for ML features)
+    p1_platform: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    p2_platform: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    p1_screen_refresh_hz: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p2_screen_refresh_hz: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p1_screen_resolution: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    p2_screen_resolution: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    p1_client_version: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    p2_client_version: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     p1: Mapped["Player"] = relationship(
         "Player", foreign_keys=[p1_id], back_populates="matches_as_p1"
@@ -97,15 +107,23 @@ class Round(Base):
     t_stimulus_us: Mapped[int] = mapped_column(BigInteger, nullable=False)
     delay_s: Mapped[float] = mapped_column(Float, nullable=False)
 
+    # Username snapshots (denormalized for easy querying)
+    p1_username: Mapped[str] = mapped_column(String(32), nullable=False, server_default="")
+    p2_username: Mapped[str] = mapped_column(String(32), nullable=False, server_default="")
+
     # Per-player measurements (server-side)
     p1_click_us: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     p2_click_us: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    p1_server_rt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
-    p2_server_rt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Client-reported (for cross-check, never trusted)
     p1_client_rt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
     p2_client_rt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Latency-compensated columns (added in migration 003)
+    p1_server_rt_raw_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p1_server_rt_compensated_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p2_server_rt_raw_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p2_server_rt_compensated_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Round outcome
     winner_id: Mapped[str | None] = mapped_column(
@@ -113,6 +131,20 @@ class Round(Base):
     )
     p1_pre_click: Mapped[bool] = mapped_column(Boolean, default=False)
     p2_pre_click: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # RTT measured this specific round via the stimulus ping/pong
+    p1_rtt_ms_round: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p2_rtt_ms_round: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Client behavioral features — anti-cheat ML inputs (all client-reported, nullable)
+    p1_click_duration_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p2_click_duration_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p1_mouse_distance_5s_px: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p2_mouse_distance_5s_px: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p1_time_since_mouse_move_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p2_time_since_mouse_move_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p1_window_focused: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    p2_window_focused: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     match: Mapped["Match"] = relationship("Match", back_populates="rounds")
 
@@ -123,6 +155,7 @@ class CalibrationRound(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     player_id: Mapped[str] = mapped_column(ForeignKey("players.id"), nullable=False)
+    username: Mapped[str] = mapped_column(String(32), nullable=False, server_default="")
     rt_ms: Mapped[float] = mapped_column(Float, nullable=False)
     side: Mapped[str] = mapped_column(String(5), nullable=False)  # 'left' or 'right'
     created_at: Mapped[datetime] = mapped_column(

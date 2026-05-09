@@ -9,84 +9,9 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_uwrxv")
 
-[node name="Background" type="ColorRect" parent="."]
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-color = Color(0.08, 0.08, 0.12, 1)
-
-[node name="Stimulus" type="ColorRect" parent="."]
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -150.0
-offset_top = -150.0
-offset_right = 150.0
-offset_bottom = 150.0
-grow_horizontal = 2
-grow_vertical = 2
-color = Color(0.2, 0.2, 0.2, 1)
-
-[node name="StatusLabel" type="Label" parent="."]
-anchors_preset = 10
-anchor_right = 1.0
-offset_top = 20.0
-offset_bottom = 90.0
-grow_horizontal = 2
-text = "Match starting..."
-horizontal_alignment = 1
-theme_override_font_sizes/font_size = 36
-
-[node name="RTLabel" type="Label" parent="."]
-anchors_preset = 12
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_top = -110.0
-offset_bottom = -20.0
-grow_horizontal = 2
-grow_vertical = 0
-text = ""
-horizontal_alignment = 1
-theme_override_font_sizes/font_size = 24
-
-[node name="ReadyLabel" type="Label" parent="."]
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -200.0
-offset_top = 165.0
-offset_right = 200.0
-offset_bottom = 205.0
-grow_horizontal = 2
-grow_vertical = 2
-text = "Click to ready up"
-horizontal_alignment = 1
-theme_override_font_sizes/font_size = 22
-visible = false
-
-[node name="CountdownLabel" type="Label" parent="."]
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -50.0
-offset_top = -25.0
-offset_right = 50.0
-offset_bottom = 25.0
-grow_horizontal = 2
-grow_vertical = 2
-text = "5"
-horizontal_alignment = 1
-theme_override_font_sizes/font_size = 36
-visible = false
-
 [node name="CountdownTimer" type="Timer" parent="."]
 wait_time = 1.0
+
+[node name="EndTimer" type="Timer" parent="."]
+wait_time = 2.0
+one_shot = true

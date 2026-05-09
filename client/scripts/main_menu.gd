@@ -8,6 +8,7 @@ const STATS: Array[String] = ["avg_rt", "best_match_rt", "wins", "winrate"]
 @onready var quickplay_btn: Button = $VBox/QuickplayButton
 @onready var private_btn: Button = $VBox/PrivateRoomButton
 @onready var quit_btn: Button = $VBox/QuitButton
+var practice_btn: Button
 @onready var username_input: LineEdit = $VBox/UsernameRow/UsernameInput
 
 @onready var top_box: ColorRect = $LeftPanel/TopGroup/TopBox
@@ -30,6 +31,13 @@ func _ready() -> void:
 	quickplay_btn.pressed.connect(_on_quickplay)
 	private_btn.pressed.connect(_on_private)
 	quit_btn.pressed.connect(get_tree().quit)
+
+	practice_btn = Button.new()
+	practice_btn.text = "Practice"
+	practice_btn.add_theme_color_override("font_color", Color(1.0, 0.65, 0.0))
+	quickplay_btn.get_parent().add_child(practice_btn)
+	quickplay_btn.get_parent().move_child(practice_btn, quickplay_btn.get_index() + 1)
+	practice_btn.pressed.connect(_on_practice)
 	username_input.text_submitted.connect(func(_t): username_input.release_focus())
 	username_input.focus_exited.connect(_on_username_saved)
 
@@ -67,6 +75,12 @@ func _on_username_saved() -> void:
 
 
 func _on_quickplay() -> void:
+	Net.queue_mode = "ranked"
+	get_tree().change_scene_to_file("res://scenes/matchmaking.tscn")
+
+
+func _on_practice() -> void:
+	Net.queue_mode = "practice"
 	get_tree().change_scene_to_file("res://scenes/matchmaking.tscn")
 
 

@@ -10,6 +10,8 @@ var SERVER_URL: String = (
 	else "wss://reflexduel-server.fly.dev/ws/play"
 )
 
+const CLIENT_VERSION: String = "0.2.0"
+
 # Signals — scenes connect to these to react to server events
 signal hello_received(player_id: String)
 signal queued()
@@ -25,6 +27,7 @@ signal connection_lost()
 signal rematch_status(votes: int)
 signal rematch_go()
 signal opponent_left()
+signal opponent_clicked(pre_click: bool)
 signal leaderboard_data(data: Dictionary)
 
 var socket: WebSocketPeer
@@ -32,6 +35,9 @@ var player_id: String = ""
 var username: String = "anon"
 var connected: bool = false
 var last_match_result: Dictionary = {}
+var last_match_start: Dictionary = {}
+var last_round_prepare: int = -1
+var queue_mode: String = "ranked"
 
 
 func _ready() -> void:
@@ -66,6 +72,8 @@ func _process(_delta: float) -> void:
 func _dispatch(msg: Dictionary) -> void:
 	var t: String = msg.get("type", "")
 	match t:
+		"ping":
+			send({"type": "pong", "ping_id": msg.get("ping_id", 0)})
 		"hello":
 			player_id = msg.get("player_id", "")
 			print("[Net] Got player ID: %s" % player_id)
@@ -81,9 +89,12 @@ func _dispatch(msg: Dictionary) -> void:
 		"cancelled":
 			cancelled.emit()
 		"match_start":
+			last_match_start = msg
+			last_round_prepare = -1  # reset for new match
 			match_start.emit(msg)
 		"round_prepare":
-			round_prepare.emit(msg.get("round_num", 0))
+			last_round_prepare = msg.get("round_num", 0)
+			round_prepare.emit(last_round_prepare)
 		"stimulus":
 			stimulus.emit(msg.get("server_time_us", 0))
 		"round_result":
@@ -96,6 +107,8 @@ func _dispatch(msg: Dictionary) -> void:
 			rematch_go.emit()
 		"opponent_left":
 			opponent_left.emit()
+		"opponent_clicked":
+			opponent_clicked.emit(bool(msg.get("pre_click", false)))
 		"leaderboard_data":
 			leaderboard_data.emit(msg)
 
@@ -113,7 +126,13 @@ func set_username(new_username: String) -> void:
 
 
 func quickplay() -> void:
+	queue_mode = "ranked"
 	send({"type": "quickplay"})
+
+
+func practice_quickplay() -> void:
+	queue_mode = "practice"
+	send({"type": "practice_quickplay"})
 
 
 func create_room() -> void:
@@ -128,11 +147,30 @@ func cancel_queue() -> void:
 	send({"type": "cancel_queue"})
 
 
-func send_click(client_rt_ms: float, pre_click: bool) -> void:
+func send_click(client_rt_ms: float, pre_click: bool, mouse_dist_px: float = 0.0, time_since_move_ms: float = 0.0, window_focused: bool = true) -> void:
 	send({
 		"type": "click",
 		"client_rt_ms": client_rt_ms,
 		"pre_click": pre_click,
+		"mouse_distance_5s_px": mouse_dist_px,
+		"time_since_mouse_move_ms": time_since_move_ms,
+		"window_focused": window_focused,
+	})
+
+
+func send_click_info(duration_ms: float) -> void:
+	send({"type": "click_info", "click_duration_ms": duration_ms})
+
+
+func send_client_info() -> void:
+	var refresh := DisplayServer.screen_get_refresh_rate()
+	var res := DisplayServer.screen_get_size()
+	send({
+		"type": "client_info",
+		"platform": OS.get_name().to_lower(),
+		"screen_refresh_hz": refresh,
+		"screen_resolution": "%dx%d" % [res.x, res.y],
+		"client_version": CLIENT_VERSION,
 	})
 
 
