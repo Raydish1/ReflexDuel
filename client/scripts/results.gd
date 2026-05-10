@@ -1,6 +1,8 @@
 extends Control
 # scripts/results.gd
 
+const FONT := preload("res://fonts/BebasNeue-Regular.ttf")
+
 @onready var result_label: Label = $VBox/ResultLabel
 @onready var score_label: Label = $VBox/ScoreLabel
 @onready var rematch_btn: Button = $VBox/RematchButton
@@ -16,17 +18,14 @@ func _ready() -> void:
 	var mode: String = result.get("mode", "ranked")
 
 	result_label.text = "YOU WON" if won else "YOU LOST"
-	result_label.modulate = Color(0.3, 0.9, 0.4) if won else Color(0.9, 0.3, 0.3)
+	result_label.add_theme_color_override("font_color", Color(0.12, 0.80, 0.30) if won else Color(0.78, 0.10, 0.10))
 
 	var mode_lbl := Label.new()
-	if mode == "practice":
-		mode_lbl.text = "PRACTICE MODE"
-		mode_lbl.modulate = Color(1.0, 0.65, 0.0)
-	else:
-		mode_lbl.text = "RANKED"
-		mode_lbl.modulate = Color(0.3, 0.75, 1.0)
+	mode_lbl.text = "PRACTICE MODE" if mode == "practice" else "RANKED"
+	mode_lbl.add_theme_color_override("font_color", Color(0.28, 0.28, 0.28))
 	mode_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	mode_lbl.add_theme_font_size_override("font_size", 20)
+	mode_lbl.add_theme_font_override("font", FONT)
+	mode_lbl.add_theme_font_size_override("font_size", 26)
 	$VBox.add_child(mode_lbl)
 	$VBox.move_child(mode_lbl, 0)
 

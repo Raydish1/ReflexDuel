@@ -1,20 +1,38 @@
 extends Control
-# scripts/main_menu.gd
 
 enum BoxState { RED, GREEN, GRAY }
 
 const STATS: Array[String] = ["avg_rt", "best_match_rt", "wins", "winrate"]
+const FONT := preload("res://fonts/BebasNeue-Regular.ttf")
 
-@onready var quickplay_btn: Button = $VBox/QuickplayButton
-@onready var private_btn: Button = $VBox/PrivateRoomButton
-@onready var quit_btn: Button = $VBox/QuitButton
-var practice_btn: Button
-@onready var username_input: LineEdit = $VBox/UsernameRow/UsernameInput
+const _BLOCKED := [
+	"nigger","nigga","niga","niger","nigg",
+	"faggot","fagot","faget","fagg",
+	"retard","retarded",
+	"kike","chink","spic","spick","wetback","gook","coon","beaner","zipperhead",
+	"cunt",
+	"fuck","fucker","fucking","fuk","fck",
+	"shit","shyt","sht",
+	"cock","cok","boner","penis","vagina",
+	"pussy","puss",
+	"bitch","biatch","btch",
+	"asshole","ashole","asshol",
+	"whore","slut","hoe",
+	"rape","rapist","raping",
+	"hitler","nazi","kkk",
+	"pedophile","pedo","nonce",
+]
 
-@onready var top_box: ColorRect = $LeftPanel/TopGroup/TopBox
-@onready var top_time_label: Label = $LeftPanel/TopGroup/TopTimeLabel
-@onready var bottom_box: ColorRect = $LeftPanel/BottomGroup/BottomBox
-@onready var bottom_time_label: Label = $LeftPanel/BottomGroup/BottomTimeLabel
+@onready var quickplay_btn: Button = $NavArea/QuickPlayBtn
+@onready var practice_btn: Button = $NavArea/PracticeBtn
+@onready var private_btn: Button = $NavArea/PrivateRoomBtn
+@onready var quit_btn: Button = $NavArea/QuitBtn
+@onready var username_input: LineEdit = $UsernameDisplay
+
+@onready var top_box: ColorRect = $ReactionArea/BoxRow/TopGroup/TopBox
+@onready var top_time_label: Label = $ReactionArea/BoxRow/TopGroup/TopTimeLabel
+@onready var bottom_box: ColorRect = $ReactionArea/BoxRow/BottomGroup/BottomBox
+@onready var bottom_time_label: Label = $ReactionArea/BoxRow/BottomGroup/BottomTimeLabel
 @onready var top_timer: Timer = $TopTimer
 @onready var bottom_timer: Timer = $BottomTimer
 var top_state: BoxState = BoxState.RED
@@ -22,24 +40,57 @@ var top_green_at: int = 0
 var bottom_state: BoxState = BoxState.RED
 var bottom_green_at: int = 0
 
-@onready var stat_selector: OptionButton = $RightPanel/StatSelector
-@onready var leaderboard_list: VBoxContainer = $RightPanel/LeaderboardList
+@onready var stat_selector: OptionButton = $StatSelector
+@onready var leaderboard_list: VBoxContainer = $LeaderboardScroll/LeaderboardList
+
+var _btn_tweens: Dictionary = {}
+var _btn_base_pos: Dictionary = {}
+
+var _session_username_set: bool = false
+var _pending_mode: String = ""
+var _pending_scene: String = ""
+var _popup_overlay: ColorRect = null
+var _popup_input: LineEdit = null
+var _popup_warning_lbl: Label = null
+
+
+func _is_inappropriate(text: String) -> bool:
+	# Normalise to catch basic leet-speak and spacing tricks
+	var s := text.to_lower()
+	s = s.replace("0", "o").replace("1", "i").replace("3", "e")
+	s = s.replace("4", "a").replace("5", "s").replace("@", "a")
+	s = s.replace("$", "s").replace("+", "t").replace("!", "i")
+	# Strip non-alpha so "f.u.c.k" or "f_u_c_k" are caught
+	var stripped := ""
+	for ch in s:
+		if ch >= "a" and ch <= "z":
+			stripped += ch
+	for word in _BLOCKED:
+		if word in stripped:
+			return true
+	return false
 
 
 func _ready() -> void:
-	username_input.text = Net.username
+	# Only pre-fill if a real username was already set
+	if Net.username != "anon" and Net.username != "":
+		username_input.text = Net.username
+		_session_username_set = true
+	else:
+		username_input.text = ""
+		username_input.placeholder_text = "type here..."
+
 	quickplay_btn.pressed.connect(_on_quickplay)
+	practice_btn.pressed.connect(_on_practice)
 	private_btn.pressed.connect(_on_private)
 	quit_btn.pressed.connect(get_tree().quit)
-
-	practice_btn = Button.new()
-	practice_btn.text = "Practice"
-	practice_btn.add_theme_color_override("font_color", Color(1.0, 0.65, 0.0))
-	quickplay_btn.get_parent().add_child(practice_btn)
-	quickplay_btn.get_parent().move_child(practice_btn, quickplay_btn.get_index() + 1)
-	practice_btn.pressed.connect(_on_practice)
 	username_input.text_submitted.connect(func(_t): username_input.release_focus())
 	username_input.focus_exited.connect(_on_username_saved)
+
+	for btn in [quickplay_btn, practice_btn, private_btn, quit_btn]:
+		_setup_btn_hover(btn)
+
+	_build_username_popup()
 
 	top_timer.timeout.connect(_on_top_timer)
 	bottom_timer.timeout.connect(_on_bottom_timer)
@@ -65,27 +116,170 @@ func _exit_tree() -> void:
 		Net.hello_received.disconnect(_on_hello_received)
 
 
-func _on_username_saved() -> void:
-	var new_name := username_input.text.strip_edges()
-	if new_name.length() < 2:
-		username_input.text = Net.username
+# ── Username popup ────────────────────────────────────────────────────────────
+
+func _build_username_popup() -> void:
+	_popup_overlay = ColorRect.new()
+	_popup_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_popup_overlay.color = Color(0.0, 0.0, 0.0, 0.68)
+	_popup_overlay.visible = false
+	_popup_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_popup_overlay)
+
+	var card := ColorRect.new()
+	card.set_anchors_preset(Control.PRESET_CENTER)
+	card.offset_left = -240; card.offset_right  = 240
+	card.offset_top  = -155; card.offset_bottom = 155
+	card.color = Color(0.97, 0.68, 0.05, 1)
+	_popup_overlay.add_child(card)
+
+	var vbox := VBoxContainer.new()
+	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vbox.offset_left = 36; vbox.offset_right  = -36
+	vbox.offset_top  = 26; vbox.offset_bottom = -26
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 18)
+	card.add_child(vbox)
+
+	var lbl := Label.new()
+	lbl.text = "PLAY AS:"
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_override("font", FONT)
+	lbl.add_theme_font_size_override("font_size", 36)
+	lbl.add_theme_color_override("font_color", Color(0.14, 0.14, 0.14))
+	vbox.add_child(lbl)
+
+	_popup_input = LineEdit.new()
+	_popup_input.placeholder_text = "enter name..."
+	_popup_input.max_length = 32
+	_popup_input.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_popup_input.add_theme_font_override("font", FONT)
+	_popup_input.add_theme_font_size_override("font_size", 30)
+	_popup_input.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	var input_style := StyleBoxFlat.new()
+	input_style.bg_color = Color(0.18, 0.18, 0.18, 1)
+	input_style.corner_radius_top_left    = 4
+	input_style.corner_radius_top_right   = 4
+	input_style.corner_radius_bottom_right = 4
+	input_style.corner_radius_bottom_left  = 4
+	input_style.content_margin_left  = 12.0
+	input_style.content_margin_right = 12.0
+	input_style.content_margin_top    = 8.0
+	input_style.content_margin_bottom = 8.0
+	_popup_input.add_theme_stylebox_override("normal", input_style)
+	_popup_input.add_theme_stylebox_override("focus",  input_style)
+	_popup_input.text_submitted.connect(_on_popup_confirm)
+	vbox.add_child(_popup_input)
+
+	var btn := Button.new()
+	btn.text = "LET'S GO"
+	btn.flat = true
+	btn.add_theme_font_override("font", FONT)
+	btn.add_theme_font_size_override("font_size", 40)
+	btn.add_theme_color_override("font_color", Color(0.14, 0.14, 0.14))
+	btn.add_theme_color_override("font_color_hover", Color(0.05, 0.05, 0.05))
+	var empty := StyleBoxEmpty.new()
+	for s in ["normal", "hover", "pressed", "focus", "disabled"]:
+		btn.add_theme_stylebox_override(s, empty)
+	btn.pressed.connect(func(): _on_popup_confirm(_popup_input.text))
+	vbox.add_child(btn)
+
+	_popup_warning_lbl = Label.new()
+	_popup_warning_lbl.text = "Name not allowed — try another"
+	_popup_warning_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_popup_warning_lbl.add_theme_font_override("font", FONT)
+	_popup_warning_lbl.add_theme_font_size_override("font_size", 18)
+	_popup_warning_lbl.add_theme_color_override("font_color", Color(0.80, 0.10, 0.10, 1))
+	_popup_warning_lbl.visible = false
+	vbox.add_child(_popup_warning_lbl)
+
+
+func _show_popup() -> void:
+	_popup_overlay.visible = true
+	_popup_input.text = ""
+	_popup_input.grab_focus()
+
+
+func _on_popup_confirm(text: String) -> void:
+	var name := text.strip_edges()
+	if name.length() < 2:
 		return
-	if new_name != Net.username:
-		Net.set_username(new_name)
+	if _is_inappropriate(name):
+		_popup_warning_lbl.visible = true
+		return
+	_popup_warning_lbl.visible = false
+	Net.set_username(name)
+	_session_username_set = true
+	username_input.text = name
+	_popup_overlay.visible = false
+	_do_navigate(_pending_mode, _pending_scene)
+
+
+# ── Navigation ────────────────────────────────────────────────────────────────
+
+func _request_navigate(mode: String, scene: String) -> void:
+	if _session_username_set:
+		_do_navigate(mode, scene)
+	else:
+		_pending_mode = mode
+		_pending_scene = scene
+		_show_popup()
+
+
+func _do_navigate(mode: String, scene: String) -> void:
+	if mode != "private":
+		Net.queue_mode = mode
+	get_tree().change_scene_to_file(scene)
 
 
 func _on_quickplay() -> void:
-	Net.queue_mode = "ranked"
-	get_tree().change_scene_to_file("res://scenes/matchmaking.tscn")
+	_request_navigate("ranked", "res://scenes/matchmaking.tscn")
 
 
 func _on_practice() -> void:
-	Net.queue_mode = "practice"
-	get_tree().change_scene_to_file("res://scenes/matchmaking.tscn")
+	_request_navigate("practice", "res://scenes/matchmaking.tscn")
 
 
 func _on_private() -> void:
-	get_tree().change_scene_to_file("res://scenes/private_lobby.tscn")
+	_request_navigate("private", "res://scenes/private_lobby.tscn")
+
+
+# ── Username header ───────────────────────────────────────────────────────────
+
+func _on_username_saved() -> void:
+	var new_name := username_input.text.strip_edges()
+	if new_name.length() < 2:
+		username_input.text = Net.username if (Net.username != "anon" and Net.username != "") else ""
+		return
+	if _is_inappropriate(new_name):
+		username_input.text = Net.username if (Net.username != "anon" and Net.username != "") else ""
+		username_input.placeholder_text = "⚠ Name not allowed"
+		get_tree().create_timer(2.5).timeout.connect(
+			func(): username_input.placeholder_text = "type here..."
+		)
+		return
+	if new_name != Net.username:
+		Net.set_username(new_name)
+		_session_username_set = true
+
+
+# ── Hover animations ──────────────────────────────────────────────────────────
+
+func _setup_btn_hover(btn: Button) -> void:
+	_btn_base_pos[btn] = btn.position
+	btn.mouse_entered.connect(_on_btn_hover.bind(btn, true))
+	btn.mouse_exited.connect(_on_btn_hover.bind(btn, false))
+
+
+func _on_btn_hover(btn: Button, hovered: bool) -> void:
+	if _btn_tweens.has(btn) and _btn_tweens[btn] != null:
+		_btn_tweens[btn].kill()
+	var tween := create_tween()
+	_btn_tweens[btn] = tween
+	var base: Vector2 = _btn_base_pos.get(btn, Vector2.ZERO)
+	var target_pos: Vector2 = base + Vector2(8.0, -3.0) if hovered else base
+	tween.tween_property(btn, "position", target_pos, 0.22) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 
 # ── Leaderboard ───────────────────────────────────────────────────────────────
@@ -100,7 +294,8 @@ func _request_leaderboard() -> void:
 	var loading := Label.new()
 	loading.text = "Loading..."
 	loading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	loading.add_theme_font_size_override("font_size", 16)
+	loading.add_theme_font_size_override("font_size", 14)
+	loading.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9, 0.8))
 	leaderboard_list.add_child(loading)
 	Net.request_leaderboard(STATS[stat_selector.selected])
 
@@ -117,7 +312,8 @@ func _on_leaderboard_data(data: Dictionary) -> void:
 		var empty := Label.new()
 		empty.text = "No data yet"
 		empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		empty.add_theme_font_size_override("font_size", 16)
+		empty.add_theme_font_size_override("font_size", 14)
+		empty.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 0.8))
 		leaderboard_list.add_child(empty)
 		return
 	var stat: String = data.get("stat", "avg_rt")
@@ -127,11 +323,15 @@ func _on_leaderboard_data(data: Dictionary) -> void:
 		var name_lbl := Label.new()
 		name_lbl.text = "#%d  %s" % [i + 1, row.get("username", "?")]
 		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		name_lbl.add_theme_font_size_override("font_size", 16)
+		name_lbl.add_theme_font_override("font", FONT)
+		name_lbl.add_theme_font_size_override("font_size", 17)
+		name_lbl.add_theme_color_override("font_color", Color(1, 1, 1, 0.95))
 		var val_lbl := Label.new()
 		val_lbl.text = _format_stat(stat, row.get("value", 0.0))
 		val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		val_lbl.add_theme_font_size_override("font_size", 16)
+		val_lbl.add_theme_font_override("font", FONT)
+		val_lbl.add_theme_font_size_override("font_size", 17)
+		val_lbl.add_theme_color_override("font_color", Color(1, 1, 1, 0.80))
 		entry.add_child(name_lbl)
 		entry.add_child(val_lbl)
 		leaderboard_list.add_child(entry)
@@ -197,6 +397,13 @@ func _on_bottom_timer() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	# Escape dismisses popup without navigating
+	if _popup_overlay and _popup_overlay.visible:
+		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+			_popup_overlay.visible = false
+			get_viewport().set_input_as_handled()
+		return
+
 	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
 		return
 	var pos: Vector2 = event.position

@@ -1,6 +1,9 @@
 [gd_scene format=3 uid="uid://dyaq3525v05r2"]
 
 [ext_resource type="Script" uid="uid://cuc5mmlvfvs34" path="res://scripts/matchmaking.gd" id="1_mk001"]
+[ext_resource type="FontFile" path="res://fonts/BebasNeue-Regular.ttf" id="2_font"]
+
+[sub_resource type="StyleBoxEmpty" id="Empty"]
 
 [node name="Matchmaking" type="Control"]
 anchor_right = 1.0
@@ -15,7 +18,11 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.08, 0.08, 0.12, 1)
+color = Color(0.97, 0.68, 0.05, 1)
+
+[node name="HeaderBar" type="Polygon2D" parent="."]
+color = Color(0.20, 0.20, 0.20, 1)
+polygon = PackedVector2Array(0, 0, 1280, 0, 1280, 42, 0, 65)
 
 [node name="DotsTimer" type="Timer" parent="."]
 wait_time = 0.5
@@ -27,26 +34,44 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -250.0
-offset_top = -180.0
-offset_right = 250.0
-offset_bottom = 180.0
+offset_left = -320.0
+offset_top = -110.0
+offset_right = 320.0
+offset_bottom = 110.0
 grow_horizontal = 2
 grow_vertical = 2
 alignment = 1
-theme_override_constants/separation = 20
+theme_override_constants/separation = 10
 
 [node name="StatusLabel" type="Label" parent="VBox"]
 text = "Searching for opponent"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 36
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 56
+theme_override_colors/font_color = Color(0.16, 0.16, 0.16, 1)
+theme_override_colors/font_shadow_color = Color(0.0, 0.0, 0.0, 0.15)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_constants/shadow_outline_size = 2
 
 [node name="DotsLabel" type="Label" parent="VBox"]
 text = ""
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 36
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 42
+theme_override_colors/font_color = Color(0.25, 0.25, 0.25, 1)
 
 [node name="CancelButton" type="Button" parent="VBox"]
-custom_minimum_size = Vector2(0, 50)
-text = "Cancel"
-theme_override_font_sizes/font_size = 24
+custom_minimum_size = Vector2(0, 62)
+flat = true
+text = "CANCEL"
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 38
+theme_override_colors/font_color = Color(0.20, 0.20, 0.20, 1)
+theme_override_colors/font_color_hover = Color(0.12, 0.12, 0.12, 1)
+theme_override_colors/font_color_pressed = Color(0.35, 0.35, 0.35, 1)
+theme_override_styles/normal = SubResource("Empty")
+theme_override_styles/hover = SubResource("Empty")
+theme_override_styles/pressed = SubResource("Empty")
+theme_override_styles/focus = SubResource("Empty")
+theme_override_styles/disabled = SubResource("Empty")

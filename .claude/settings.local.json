@@ -8,7 +8,15 @@
       "mcp__godot-ai__editor_screenshot",
       "mcp__godot-ai__project_run",
       "mcp__godot-ai__scene_get_hierarchy",
-      "mcp__godot-ai__filesystem_manage"
+      "mcp__godot-ai__filesystem_manage",
+      "mcp__godot-ai__project_manage",
+      "mcp__godot-ai__scene_open",
+      "Bash(ping -n 4 127.0.0.1)",
+      "Bash(ping -n 5 127.0.0.1)",
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"c:\\\\Users\\\\Rayha\\\\Documents\\\\ReflexDuel\\\\ReflexDuel\\\\client\\\\fonts\" | Out-Null; Invoke-WebRequest -Uri \"https://github.com/googlefonts/bebas-neue/raw/main/fonts/ttf/BebasNeue-Regular.ttf\" -OutFile \"c:\\\\Users\\\\Rayha\\\\Documents\\\\ReflexDuel\\\\ReflexDuel\\\\client\\\\fonts\\\\BebasNeue-Regular.ttf\" -UseBasicParsing; Write-Host \"Done: $\\(\\(Get-Item 'c:\\\\Users\\\\Rayha\\\\Documents\\\\ReflexDuel\\\\ReflexDuel\\\\client\\\\fonts\\\\BebasNeue-Regular.ttf'\\).Length\\) bytes\")",
+      "PowerShell(Invoke-WebRequest -Uri \"https://raw.githubusercontent.com/googlefonts/bebas-neue/main/fonts/ttf/BebasNeue-Regular.ttf\" -OutFile \"c:\\\\Users\\\\Rayha\\\\Documents\\\\ReflexDuel\\\\ReflexDuel\\\\client\\\\fonts\\\\BebasNeue-Regular.ttf\" -UseBasicParsing; Write-Host \"Done: $\\(\\(Get-Item 'c:\\\\Users\\\\Rayha\\\\Documents\\\\ReflexDuel\\\\ReflexDuel\\\\client\\\\fonts\\\\BebasNeue-Regular.ttf'\\).Length\\) bytes\")",
+      "WebFetch(domain:fonts.googleapis.com)",
+      "PowerShell(Invoke-WebRequest -Uri \"https://fonts.gstatic.com/s/bebasneue/v16/JTUSjIg69CK48gW7PXooxW4.ttf\" -OutFile \"c:\\\\Users\\\\Rayha\\\\Documents\\\\ReflexDuel\\\\ReflexDuel\\\\client\\\\fonts\\\\BebasNeue-Regular.ttf\" -UseBasicParsing; Write-Host \"Done: $\\(\\(Get-Item 'c:\\\\Users\\\\Rayha\\\\Documents\\\\ReflexDuel\\\\ReflexDuel\\\\client\\\\fonts\\\\BebasNeue-Regular.ttf'\\).Length\\) bytes\")"
     ]
   }
 }

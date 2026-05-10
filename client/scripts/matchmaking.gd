@@ -41,7 +41,7 @@ func _on_match_start(_data: Dictionary) -> void:
 	status_label.add_theme_font_size_override("font_size", 48)
 	status_label.text = "Match Found!"
 	status_label.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4))
-	await get_tree().create_timer(1.0).timeout
+	await get_tree().create_timer(2.0).timeout
 	get_tree().change_scene_to_file("res://scenes/game.tscn")
 
 

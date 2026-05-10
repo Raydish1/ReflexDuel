@@ -1,6 +1,8 @@
 extends Control
 # scripts/game.gd
 
+const FONT := preload("res://fonts/BebasNeue-Regular.ttf")
+
 enum State { WAITING, STIMULUS, AFTER_CLICK, READY_UP, MATCH_END }
 var state: State = State.WAITING
 
@@ -97,33 +99,35 @@ func _build_ui() -> void:
 
 	var bg := ColorRect.new()
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.color = Color(0.08, 0.08, 0.12)
+	bg.color = Color(0.97, 0.68, 0.05)
 	add_child(bg)
 
 	var top_bar := ColorRect.new()
 	top_bar.anchor_right = 1.0
 	top_bar.offset_bottom = TOP
-	top_bar.color = Color(0.11, 0.11, 0.16)
+	top_bar.color = Color(0.20, 0.20, 0.20)
 	add_child(top_bar)
 
 	var div := ColorRect.new()
 	div.anchor_left = 0.5;  div.anchor_right  = 0.5
 	div.anchor_top  = 0.0;  div.anchor_bottom = 1.0
 	div.offset_left = -2;   div.offset_right  = 2
-	div.color = Color(0.28, 0.28, 0.35)
+	div.color = Color(0.10, 0.10, 0.10, 1)
 	add_child(div)
 
-	# Reaction boxes start red (WAITING state)
+	# Reaction boxes start red (WAITING state) — 7 px amber border on all sides
 	my_box = ColorRect.new()
 	my_box.anchor_right = 0.5;  my_box.anchor_bottom = 1.0
-	my_box.offset_top = TOP + 2; my_box.offset_right = -2
+	my_box.offset_left = 7;     my_box.offset_top    = TOP + 7
+	my_box.offset_right = -7;   my_box.offset_bottom = -7
 	my_box.color = COL_WAITING
 	add_child(my_box)
 
 	opp_box = ColorRect.new()
 	opp_box.anchor_left = 0.5;   opp_box.anchor_right  = 1.0
 	opp_box.anchor_bottom = 1.0
-	opp_box.offset_top = TOP + 2; opp_box.offset_left = 2
+	opp_box.offset_left = 7;    opp_box.offset_top   = TOP + 7
+	opp_box.offset_right = -7;  opp_box.offset_bottom = -7
 	opp_box.color = COL_WAITING
 	add_child(opp_box)
 
@@ -133,7 +137,7 @@ func _build_ui() -> void:
 	you_lbl.anchor_right = 0.5
 	you_lbl.offset_top = TOP + 14;  you_lbl.offset_bottom = TOP + 56
 	you_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	you_lbl.modulate = Color(0.6, 0.6, 0.72)
+	you_lbl.modulate = Color(1.0, 1.0, 1.0, 0.35)
 	you_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(you_lbl)
 
@@ -142,22 +146,22 @@ func _build_ui() -> void:
 	opp_side_lbl.anchor_left = 0.5;  opp_side_lbl.anchor_right = 1.0
 	opp_side_lbl.offset_top = TOP + 14;  opp_side_lbl.offset_bottom = TOP + 56
 	opp_side_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	opp_side_lbl.modulate = Color(0.6, 0.6, 0.72)
+	opp_side_lbl.modulate = Color(1.0, 1.0, 1.0, 0.35)
 	opp_side_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(opp_side_lbl)
 
 	# Names in top bar
-	my_name_lbl = _lbl(16)
-	my_name_lbl.anchor_right = 0.45
+	my_name_lbl = _lbl(44)
+	my_name_lbl.anchor_right = 0.42
 	my_name_lbl.offset_top = 0;  my_name_lbl.offset_bottom = TOP
-	my_name_lbl.offset_left = 16
+	my_name_lbl.offset_left = 14
 	my_name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	add_child(my_name_lbl)
 
-	opp_name_lbl = _lbl(16)
-	opp_name_lbl.anchor_left = 0.55;  opp_name_lbl.anchor_right = 1.0
+	opp_name_lbl = _lbl(44)
+	opp_name_lbl.anchor_left = 0.58;  opp_name_lbl.anchor_right = 1.0
 	opp_name_lbl.offset_top = 0;  opp_name_lbl.offset_bottom = TOP
-	opp_name_lbl.offset_right = -16
+	opp_name_lbl.offset_right = -14
 	opp_name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	opp_name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	add_child(opp_name_lbl)
@@ -227,12 +231,12 @@ func _build_ui() -> void:
 	# Intro overlay (full-screen, blocks input, hidden initially)
 	intro_overlay = ColorRect.new()
 	intro_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	intro_overlay.color = Color(0.05, 0.05, 0.08, 0.93)
+	intro_overlay.color = Color(0.12, 0.12, 0.12, 0.95)
 	intro_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	intro_overlay.visible = false
 	add_child(intro_overlay)
 
-	intro_lbl = _lbl(52)
+	intro_lbl = _lbl(60)
 	intro_lbl.set_anchors_preset(Control.PRESET_CENTER)
 	intro_lbl.offset_left = -480;  intro_lbl.offset_right  = 480
 	intro_lbl.offset_top  = -60;   intro_lbl.offset_bottom = 60
@@ -274,9 +278,11 @@ func _build_ui() -> void:
 	end_overlay.add_child(_end_right_lbl)
 
 
-func _lbl(size: int) -> Label:
+func _lbl(sz: int) -> Label:
 	var l := Label.new()
-	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_font_size_override("font_size", sz)
+	l.add_theme_font_override("font", FONT)
+	l.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	return l
 
 
@@ -293,10 +299,10 @@ func _refresh_scores() -> void:
 func _set_mode_label() -> void:
 	if current_mode == "practice":
 		mode_lbl.text = "PRACTICE"
-		mode_lbl.modulate = Color(1.0, 0.65, 0.0)
+		mode_lbl.add_theme_color_override("font_color", Color(0.97, 0.68, 0.05))
 	else:
 		mode_lbl.text = "RANKED"
-		mode_lbl.modulate = Color(0.3, 0.75, 1.0)
+		mode_lbl.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
 
 func _fmt(v) -> String:
 	return "%.1f ms" % float(v) if v != null else "—"
@@ -325,7 +331,7 @@ func _on_round_prepare(round_num: int) -> void:
 
 func _show_vs_intro() -> void:
 	intro_overlay.visible = true
-	intro_lbl.text = "%s  vs  %s" % [my_username, opponent_username]
+	intro_lbl.text = "%s  VS  %s" % [my_username, opponent_username]
 	await get_tree().create_timer(2.0).timeout
 	_dismiss_intro()
 
