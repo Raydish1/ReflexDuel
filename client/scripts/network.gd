@@ -29,6 +29,7 @@ signal rematch_go()
 signal opponent_left()
 signal opponent_clicked(pre_click: bool)
 signal leaderboard_data(data: Dictionary)
+signal recent_matches_data(player_id: String, matches: Array)
 
 var socket: WebSocketPeer
 var player_id: String = ""
@@ -111,6 +112,8 @@ func _dispatch(msg: Dictionary) -> void:
 			opponent_clicked.emit(bool(msg.get("pre_click", false)))
 		"leaderboard_data":
 			leaderboard_data.emit(msg)
+		"recent_matches_data":
+			recent_matches_data.emit(msg.get("player_id", ""), msg.get("matches", []))
 
 
 func send(msg: Dictionary) -> void:
@@ -192,3 +195,10 @@ func send_calibration(rt_ms: float, side: String) -> void:
 
 func request_leaderboard(stat: String) -> void:
 	send({"type": "leaderboard_request", "stat": stat})
+
+
+func request_recent_matches(player_id: String = "") -> void:
+	var msg := {"type": "recent_matches_request"}
+	if player_id != "":
+		msg["player_id"] = player_id
+	send(msg)

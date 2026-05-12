@@ -1,0 +1,10 @@
+[gd_scene format=3 uid="uid://c3xrm8w4oavqp"]
+
+[ext_resource type="Script" uid="uid://b8km2pq7t1nwv" path="res://scripts/recent_matches.gd" id="1_rm001"]
+
+[node name="RecentMatches" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_rm001")

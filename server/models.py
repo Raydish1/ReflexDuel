@@ -65,6 +65,10 @@ class Match(Base):
     p1_final_score: Mapped[int] = mapped_column(Integer, default=0)
     p2_final_score: Mapped[int] = mapped_column(Integer, default=0)
 
+    # Per-player match average RT (compensated, pre-clicks excluded), null if no valid rounds
+    p1_avg_rt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p2_avg_rt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     # Username snapshots at match time (display only — player.username can change)
     p1_username: Mapped[str] = mapped_column(String(32), nullable=False, server_default="")
     p2_username: Mapped[str] = mapped_column(String(32), nullable=False, server_default="")

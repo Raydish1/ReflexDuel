@@ -2,7 +2,7 @@ extends Control
 
 enum BoxState { RED, GREEN, GRAY }
 
-const STATS: Array[String] = ["avg_rt", "best_match_rt", "wins", "winrate"]
+const STATS: Array[String] = ["avg_rt", "best_match_rt", "wins", "winrate", "cheaters"]
 const FONT := preload("res://fonts/BebasNeue-Regular.ttf")
 
 const _BLOCKED := [
@@ -24,8 +24,8 @@ const _BLOCKED := [
 ]
 
 @onready var quickplay_btn: Button = $NavArea/QuickPlayBtn
-@onready var practice_btn: Button = $NavArea/PracticeBtn
 @onready var private_btn: Button = $NavArea/PrivateRoomBtn
+@onready var recent_matches_btn: Button = $NavArea/RecentMatchesBtn
 @onready var quit_btn: Button = $NavArea/QuitBtn
 @onready var username_input: LineEdit = $UsernameDisplay
 
@@ -81,13 +81,13 @@ func _ready() -> void:
 		username_input.placeholder_text = "type here..."
 
 	quickplay_btn.pressed.connect(_on_quickplay)
-	practice_btn.pressed.connect(_on_practice)
 	private_btn.pressed.connect(_on_private)
+	recent_matches_btn.pressed.connect(_on_recent_matches)
 	quit_btn.pressed.connect(get_tree().quit)
 	username_input.text_submitted.connect(func(_t): username_input.release_focus())
 	username_input.focus_exited.connect(_on_username_saved)
 
-	for btn in [quickplay_btn, practice_btn, private_btn, quit_btn]:
+	for btn in [quickplay_btn, private_btn, recent_matches_btn, quit_btn]:
 		_setup_btn_hover(btn)
 
 	_build_username_popup()
@@ -100,7 +100,9 @@ func _ready() -> void:
 	stat_selector.add_item("Avg Reaction Time")
 	stat_selector.add_item("Best Match Avg")
 	stat_selector.add_item("Most Wins")
-	stat_selector.add_item("Win Rate (≥2 matches)")
+	stat_selector.add_item("Win Rate (≥5 matches)")
+	stat_selector.add_item("Cheaters")
+	stat_selector.select(1)
 	stat_selector.item_selected.connect(_on_stat_selected)
 	Net.leaderboard_data.connect(_on_leaderboard_data)
 	if Net.player_id != "":
@@ -236,12 +238,12 @@ func _on_quickplay() -> void:
 	_request_navigate("ranked", "res://scenes/matchmaking.tscn")
 
 
-func _on_practice() -> void:
-	_request_navigate("practice", "res://scenes/matchmaking.tscn")
-
-
 func _on_private() -> void:
 	_request_navigate("private", "res://scenes/private_lobby.tscn")
+
+
+func _on_recent_matches() -> void:
+	get_tree().change_scene_to_file("res://scenes/recent_matches.tscn")
 
 
 # ── Username header ───────────────────────────────────────────────────────────
@@ -327,7 +329,10 @@ func _on_leaderboard_data(data: Dictionary) -> void:
 		name_lbl.add_theme_font_size_override("font_size", 17)
 		name_lbl.add_theme_color_override("font_color", Color(1, 1, 1, 0.95))
 		var val_lbl := Label.new()
-		val_lbl.text = _format_stat(stat, row.get("value", 0.0))
+		if stat == "winrate" and row.has("wins"):
+			val_lbl.text = "%.1f%%  %d-%d" % [row.get("value", 0.0), row.get("wins", 0), row.get("losses", 0)]
+		else:
+			val_lbl.text = _format_stat(stat, row.get("value", 0.0))
 		val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		val_lbl.add_theme_font_override("font", FONT)
 		val_lbl.add_theme_font_size_override("font_size", 17)
@@ -345,6 +350,8 @@ func _format_stat(stat: String, value: float) -> String:
 			return "%d wins" % int(value)
 		"winrate":
 			return "%.1f%%" % value
+		"cheaters":
+			return "%d flags" % int(value)
 	return "%.1f" % value
 
 

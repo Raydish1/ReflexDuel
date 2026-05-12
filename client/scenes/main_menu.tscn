@@ -1,9 +1,7 @@
 [gd_scene format=3 uid="uid://dp8r5fhk3v7nm"]
 
 [ext_resource type="Script" uid="uid://btvehqmao8ei5" path="res://scripts/main_menu.gd" id="1_mm001"]
-[ext_resource type="FontFile" path="res://fonts/BebasNeue-Regular.ttf" id="2_font"]
-
-[sub_resource type="StyleBoxEmpty" id="Empty"]
+[ext_resource type="FontFile" uid="uid://bmm3uiqd5few4" path="res://fonts/BebasNeue-Regular.ttf" id="2_font"]
 
 [sub_resource type="StyleBoxFlat" id="CircleIcon"]
 bg_color = Color(0.96, 0.65, 0.04, 1)
@@ -11,34 +9,38 @@ border_width_left = 3
 border_width_top = 3
 border_width_right = 3
 border_width_bottom = 3
-border_color = Color(0.68, 0.42, 0.0, 1)
+border_color = Color(0.68, 0.42, 0, 1)
 corner_radius_top_left = 27
 corner_radius_top_right = 27
 corner_radius_bottom_right = 27
 corner_radius_bottom_left = 27
 
-[node name="MainMenu" type="Control"]
+[sub_resource type="StyleBoxEmpty" id="Empty"]
+
+[node name="MainMenu" type="Control" unique_id=8561772]
+layout_mode = 3
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_mm001")
 
-[node name="Background" type="ColorRect" parent="."]
-anchors_preset = 15
+[node name="Background" type="ColorRect" parent="." unique_id=841980569]
+layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.97, 0.68, 0.05, 1)
 
-[node name="HeaderBar" type="Polygon2D" parent="."]
-color = Color(0.20, 0.20, 0.20, 1)
+[node name="HeaderBar" type="Polygon2D" parent="." unique_id=1217372997]
+color = Color(0.2, 0.2, 0.2, 1)
 polygon = PackedVector2Array(0, 0, 1280, 0, 1280, 42, 0, 65)
 
-[node name="LeaderboardShadowFar" type="ColorRect" parent="."]
+[node name="LeaderboardShadowFar" type="ColorRect" parent="." unique_id=643592546]
+layout_mode = 0
 anchor_left = 1.0
-anchor_top = 0.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -325.0
@@ -46,11 +48,11 @@ offset_top = 95.0
 offset_right = 3.0
 offset_bottom = -37.0
 grow_horizontal = 0
-color = Color(0.0, 0.0, 0.0, 0.05)
+color = Color(0, 0, 0, 0.05)
 
-[node name="LeaderboardShadowMid" type="ColorRect" parent="."]
+[node name="LeaderboardShadowMid" type="ColorRect" parent="." unique_id=810351638]
+layout_mode = 0
 anchor_left = 1.0
-anchor_top = 0.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -333.0
@@ -58,11 +60,11 @@ offset_top = 87.0
 offset_right = -5.0
 offset_bottom = -45.0
 grow_horizontal = 0
-color = Color(0.0, 0.0, 0.0, 0.11)
+color = Color(0, 0, 0, 0.11)
 
-[node name="LeaderboardShadowNear" type="ColorRect" parent="."]
+[node name="LeaderboardShadowNear" type="ColorRect" parent="." unique_id=1719078615]
+layout_mode = 0
 anchor_left = 1.0
-anchor_top = 0.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -339.0
@@ -70,11 +72,11 @@ offset_top = 81.0
 offset_right = -11.0
 offset_bottom = -51.0
 grow_horizontal = 0
-color = Color(0.0, 0.0, 0.0, 0.18)
+color = Color(0, 0, 0, 0.18)
 
-[node name="LeaderboardBorder" type="ColorRect" parent="."]
+[node name="LeaderboardBorder" type="ColorRect" parent="." unique_id=457083286]
+layout_mode = 0
 anchor_left = 1.0
-anchor_top = 0.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -344.0
@@ -84,9 +86,9 @@ offset_bottom = -56.0
 grow_horizontal = 0
 color = Color(0.12, 0.12, 0.12, 1)
 
-[node name="LeaderboardBg" type="ColorRect" parent="."]
+[node name="LeaderboardBg" type="ColorRect" parent="." unique_id=1061759483]
+layout_mode = 0
 anchor_left = 1.0
-anchor_top = 0.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -340.0
@@ -94,13 +96,12 @@ offset_top = 80.0
 offset_right = -20.0
 offset_bottom = -60.0
 grow_horizontal = 0
-color = Color(0.40, 0.40, 0.40, 1)
+color = Color(0.4, 0.4, 0.4, 1)
 
-[node name="LeaderboardHeaderBg" type="ColorRect" parent="."]
+[node name="LeaderboardHeaderBg" type="ColorRect" parent="." unique_id=1340412335]
+layout_mode = 0
 anchor_left = 1.0
-anchor_top = 0.0
 anchor_right = 1.0
-anchor_bottom = 0.0
 offset_left = -340.0
 offset_top = 80.0
 offset_right = -20.0
@@ -108,75 +109,76 @@ offset_bottom = 138.0
 grow_horizontal = 0
 color = Color(0.22, 0.22, 0.22, 1)
 
-[node name="AccountIconPanel" type="Panel" parent="."]
+[node name="AccountIconPanel" type="Panel" parent="." unique_id=975696388]
+layout_mode = 0
 offset_left = 12.0
 offset_top = 7.0
 offset_right = 63.0
 offset_bottom = 58.0
 theme_override_styles/panel = SubResource("CircleIcon")
 
-[node name="AccountSymbol" type="Label" parent="AccountIconPanel"]
-anchors_preset = 15
+[node name="AccountSymbol" type="Label" parent="AccountIconPanel" unique_id=1521655209]
+layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_colors/font_color = Color(0.2, 0.2, 0.2, 1)
+theme_override_font_sizes/font_size = 24
 text = "◉"
 horizontal_alignment = 1
 vertical_alignment = 1
-theme_override_font_sizes/font_size = 24
-theme_override_colors/font_color = Color(0.20, 0.20, 0.20, 1)
 
-[node name="UsernameLabel" type="Label" parent="."]
+[node name="UsernameLabel" type="Label" parent="." unique_id=1099572103]
+layout_mode = 0
 offset_left = 76.0
 offset_top = 14.0
 offset_right = 240.0
 offset_bottom = 56.0
-text = "USERNAME"
-vertical_alignment = 1
+theme_override_colors/font_color = Color(0.65, 0.65, 0.65, 1)
 theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 22
-theme_override_colors/font_color = Color(0.65, 0.65, 0.65, 1)
+text = "USERNAME"
+vertical_alignment = 1
 
-[node name="UsernameDisplay" type="LineEdit" parent="."]
+[node name="UsernameDisplay" type="LineEdit" parent="." unique_id=217106973]
+layout_mode = 0
 offset_left = 244.0
 offset_top = 11.0
 offset_right = 800.0
 offset_bottom = 58.0
-max_length = 32
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 24
-theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_styles/normal = SubResource("Empty")
-theme_override_styles/focus = SubResource("Empty")
 theme_override_styles/read_only = SubResource("Empty")
+theme_override_styles/focus = SubResource("Empty")
+max_length = 32
 
-[node name="LeaderboardTitle" type="Label" parent="."]
+[node name="LeaderboardTitle" type="Label" parent="." unique_id=222060856]
+layout_mode = 0
 anchor_left = 1.0
-anchor_top = 0.0
 anchor_right = 1.0
-anchor_bottom = 0.0
 offset_left = -340.0
 offset_top = 80.0
 offset_right = -20.0
 offset_bottom = 138.0
 grow_horizontal = 0
-text = "LEADERBOARD"
-horizontal_alignment = 1
-vertical_alignment = 1
-theme_override_fonts/font = ExtResource("2_font")
-theme_override_font_sizes/font_size = 36
 theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_shadow_color = Color(0.0, 0.0, 0.0, 0.55)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.55)
 theme_override_constants/shadow_offset_x = 1
 theme_override_constants/shadow_offset_y = 2
 theme_override_constants/shadow_outline_size = 2
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 36
+text = "LEADERBOARD"
+horizontal_alignment = 1
+vertical_alignment = 1
 
-[node name="StatSelector" type="OptionButton" parent="."]
+[node name="StatSelector" type="OptionButton" parent="." unique_id=1226710904]
+layout_mode = 0
 anchor_left = 1.0
-anchor_top = 0.0
 anchor_right = 1.0
-anchor_bottom = 0.0
 offset_left = -334.0
 offset_top = 144.0
 offset_right = -26.0
@@ -184,9 +186,9 @@ offset_bottom = 172.0
 grow_horizontal = 0
 theme_override_font_sizes/font_size = 13
 
-[node name="LeaderboardScroll" type="ScrollContainer" parent="."]
+[node name="LeaderboardScroll" type="ScrollContainer" parent="." unique_id=445784672]
+layout_mode = 0
 anchor_left = 1.0
-anchor_top = 0.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -334.0
@@ -196,161 +198,151 @@ offset_bottom = -66.0
 grow_horizontal = 0
 horizontal_scroll_mode = 0
 
-[node name="LeaderboardList" type="VBoxContainer" parent="LeaderboardScroll"]
+[node name="LeaderboardList" type="VBoxContainer" parent="LeaderboardScroll" unique_id=554190787]
+layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 6
 
-[node name="TitleLabel" type="Label" parent="."]
+[node name="TitleLabel" type="Label" parent="." unique_id=731199726]
+layout_mode = 0
 offset_left = 20.0
 offset_top = 82.0
 offset_right = 960.0
 offset_bottom = 185.0
-text = "REFLEX DUEL"
-horizontal_alignment = 1
-theme_override_fonts/font = ExtResource("2_font")
-theme_override_font_sizes/font_size = 96
 theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_shadow_color = Color(0.04, 0.04, 0.04, 0.90)
+theme_override_colors/font_shadow_color = Color(0.04, 0.04, 0.04, 0.9)
 theme_override_constants/shadow_offset_x = 3
 theme_override_constants/shadow_offset_y = 4
 theme_override_constants/shadow_outline_size = 4
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 96
+text = "REFLEX DUEL"
+horizontal_alignment = 1
 
-[node name="NavArea" type="Control" parent="."]
+[node name="NavArea" type="Control" parent="." unique_id=1919652166]
+anchors_preset = 0
 offset_left = 22.0
 offset_top = 200.0
 offset_right = 820.0
 offset_bottom = 480.0
 
-[node name="QuickPlayBtn" type="Button" parent="NavArea"]
+[node name="QuickPlayBtn" type="Button" parent="NavArea" unique_id=1565168568]
+layout_mode = 0
 offset_right = 480.0
 offset_bottom = 68.0
-flat = true
-text = "QUICK PLAY"
-alignment = 0
+theme_override_colors/font_color = Color(0.18, 0.18, 0.18, 1)
 theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 60
-theme_override_colors/font_color = Color(0.18, 0.18, 0.18, 1)
-theme_override_colors/font_color_hover = Color(0.18, 0.18, 0.18, 1)
-theme_override_colors/font_color_pressed = Color(0.35, 0.35, 0.35, 1)
-theme_override_colors/font_shadow_color = Color(0.0, 0.0, 0.0, 0.12)
-theme_override_constants/shadow_offset_x = 1
-theme_override_constants/shadow_offset_y = 1
-theme_override_constants/shadow_outline_size = 1
 theme_override_styles/normal = SubResource("Empty")
-theme_override_styles/hover = SubResource("Empty")
 theme_override_styles/pressed = SubResource("Empty")
-theme_override_styles/focus = SubResource("Empty")
+theme_override_styles/hover = SubResource("Empty")
 theme_override_styles/disabled = SubResource("Empty")
+theme_override_styles/focus = SubResource("Empty")
+text = "QUICK PLAY"
+flat = true
+alignment = 0
 
-[node name="PracticeBtn" type="Button" parent="NavArea"]
+[node name="PrivateRoomBtn" type="Button" parent="NavArea" unique_id=1568499366]
+layout_mode = 0
 offset_top = 72.0
 offset_right = 480.0
 offset_bottom = 140.0
-flat = true
-text = "EXPERIMENTAL"
-alignment = 0
+theme_override_colors/font_color = Color(0.18, 0.18, 0.18, 1)
 theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 60
-theme_override_colors/font_color = Color(0.18, 0.18, 0.18, 1)
-theme_override_colors/font_color_hover = Color(0.18, 0.18, 0.18, 1)
-theme_override_colors/font_color_pressed = Color(0.35, 0.35, 0.35, 1)
-theme_override_colors/font_shadow_color = Color(0.0, 0.0, 0.0, 0.12)
-theme_override_constants/shadow_offset_x = 1
-theme_override_constants/shadow_offset_y = 1
-theme_override_constants/shadow_outline_size = 1
 theme_override_styles/normal = SubResource("Empty")
-theme_override_styles/hover = SubResource("Empty")
 theme_override_styles/pressed = SubResource("Empty")
-theme_override_styles/focus = SubResource("Empty")
+theme_override_styles/hover = SubResource("Empty")
 theme_override_styles/disabled = SubResource("Empty")
+theme_override_styles/focus = SubResource("Empty")
+text = "PRIVATE ROOM"
+flat = true
+alignment = 0
 
-[node name="PrivateRoomBtn" type="Button" parent="NavArea"]
+[node name="RecentMatchesBtn" type="Button" parent="NavArea" unique_id=734821956]
+layout_mode = 0
 offset_top = 144.0
 offset_right = 480.0
 offset_bottom = 212.0
-flat = true
-text = "PRIVATE ROOM"
-alignment = 0
+theme_override_colors/font_color = Color(0.18, 0.18, 0.18, 1)
 theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 60
-theme_override_colors/font_color = Color(0.18, 0.18, 0.18, 1)
-theme_override_colors/font_color_hover = Color(0.18, 0.18, 0.18, 1)
-theme_override_colors/font_color_pressed = Color(0.35, 0.35, 0.35, 1)
-theme_override_colors/font_shadow_color = Color(0.0, 0.0, 0.0, 0.12)
-theme_override_constants/shadow_offset_x = 1
-theme_override_constants/shadow_offset_y = 1
-theme_override_constants/shadow_outline_size = 1
 theme_override_styles/normal = SubResource("Empty")
-theme_override_styles/hover = SubResource("Empty")
 theme_override_styles/pressed = SubResource("Empty")
-theme_override_styles/focus = SubResource("Empty")
+theme_override_styles/hover = SubResource("Empty")
 theme_override_styles/disabled = SubResource("Empty")
+theme_override_styles/focus = SubResource("Empty")
+text = "RECENT MATCHES"
+flat = true
+alignment = 0
 
-[node name="QuitBtn" type="Button" parent="NavArea"]
+[node name="QuitBtn" type="Button" parent="NavArea" unique_id=595486345]
+layout_mode = 0
 offset_top = 216.0
 offset_right = 480.0
 offset_bottom = 284.0
-flat = true
-text = "QUIT GAME"
-alignment = 0
+theme_override_colors/font_color = Color(0.18, 0.18, 0.18, 1)
 theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 60
-theme_override_colors/font_color = Color(0.18, 0.18, 0.18, 1)
-theme_override_colors/font_color_hover = Color(0.18, 0.18, 0.18, 1)
-theme_override_colors/font_color_pressed = Color(0.35, 0.35, 0.35, 1)
-theme_override_colors/font_shadow_color = Color(0.0, 0.0, 0.0, 0.12)
-theme_override_constants/shadow_offset_x = 1
-theme_override_constants/shadow_offset_y = 1
-theme_override_constants/shadow_outline_size = 1
 theme_override_styles/normal = SubResource("Empty")
-theme_override_styles/hover = SubResource("Empty")
 theme_override_styles/pressed = SubResource("Empty")
-theme_override_styles/focus = SubResource("Empty")
+theme_override_styles/hover = SubResource("Empty")
 theme_override_styles/disabled = SubResource("Empty")
+theme_override_styles/focus = SubResource("Empty")
+text = "QUIT GAME"
+flat = true
+alignment = 0
 
-[node name="ReactionArea" type="VBoxContainer" parent="."]
+[node name="ReactionArea" type="VBoxContainer" parent="." unique_id=9225235]
+layout_mode = 0
 offset_left = 22.0
 offset_top = 495.0
 offset_right = 325.0
 offset_bottom = 700.0
 theme_override_constants/separation = 8
 
-[node name="ReactionTitle" type="Label" parent="ReactionArea"]
-text = "REACTION PRACTICE"
-theme_override_font_sizes/font_size = 13
+[node name="ReactionTitle" type="Label" parent="ReactionArea" unique_id=63750684]
+layout_mode = 2
 theme_override_colors/font_color = Color(0.28, 0.28, 0.28, 0.85)
+theme_override_font_sizes/font_size = 13
+text = "REACTION PRACTICE"
 
-[node name="BoxRow" type="HBoxContainer" parent="ReactionArea"]
+[node name="BoxRow" type="HBoxContainer" parent="ReactionArea" unique_id=1893788329]
+layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="TopGroup" type="VBoxContainer" parent="ReactionArea/BoxRow"]
+[node name="TopGroup" type="VBoxContainer" parent="ReactionArea/BoxRow" unique_id=354355147]
+layout_mode = 2
 theme_override_constants/separation = 5
 
-[node name="TopBox" type="ColorRect" parent="ReactionArea/BoxRow/TopGroup"]
+[node name="TopBox" type="ColorRect" parent="ReactionArea/BoxRow/TopGroup" unique_id=1912016484]
 custom_minimum_size = Vector2(100, 100)
+layout_mode = 2
 color = Color(0.65, 0.1, 0.1, 1)
 
-[node name="TopTimeLabel" type="Label" parent="ReactionArea/BoxRow/TopGroup"]
+[node name="TopTimeLabel" type="Label" parent="ReactionArea/BoxRow/TopGroup" unique_id=387850734]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.25, 0.25, 0.25, 1)
+theme_override_font_sizes/font_size = 14
 text = "—"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 14
-theme_override_colors/font_color = Color(0.25, 0.25, 0.25, 1)
 
-[node name="BottomGroup" type="VBoxContainer" parent="ReactionArea/BoxRow"]
+[node name="BottomGroup" type="VBoxContainer" parent="ReactionArea/BoxRow" unique_id=2099642223]
+layout_mode = 2
 theme_override_constants/separation = 5
 
-[node name="BottomBox" type="ColorRect" parent="ReactionArea/BoxRow/BottomGroup"]
+[node name="BottomBox" type="ColorRect" parent="ReactionArea/BoxRow/BottomGroup" unique_id=2022940129]
 custom_minimum_size = Vector2(100, 100)
+layout_mode = 2
 color = Color(0.65, 0.1, 0.1, 1)
 
-[node name="BottomTimeLabel" type="Label" parent="ReactionArea/BoxRow/BottomGroup"]
+[node name="BottomTimeLabel" type="Label" parent="ReactionArea/BoxRow/BottomGroup" unique_id=1170640699]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.25, 0.25, 0.25, 1)
+theme_override_font_sizes/font_size = 14
 text = "—"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 14
-theme_override_colors/font_color = Color(0.25, 0.25, 0.25, 1)
 
-[node name="TopTimer" type="Timer" parent="."]
-wait_time = 1.0
+[node name="TopTimer" type="Timer" parent="." unique_id=1091210085]
 
-[node name="BottomTimer" type="Timer" parent="."]
-wait_time = 1.0
+[node name="BottomTimer" type="Timer" parent="." unique_id=1646994912]

@@ -36,11 +36,11 @@ ROUNDS_TO_WIN = 3
 MAX_INACTIVE_ROUNDS = 3
 MIN_DELAY_S = 2.0
 MAX_DELAY_S = 6.0
-HUMAN_FLOOR_MS = 100
+CHEAT_DURATION_MS = 10.0  # click held < 10ms → auto-clicker flag
 ROOM_CODE_CHARS = string.ascii_uppercase + string.digits
 ROOM_CODE_LEN = 6
 CLIENT_VERSION = "0.2.0"
-# Pong must arrive before any valid click (HUMAN_FLOOR_MS guarantees this).
+# Pong must arrive before any valid click.
 # 0.5s fallback timeout covers extreme packet loss.
 ROUND_PING_TIMEOUT_S = 0.5
 
@@ -186,7 +186,7 @@ async def ensure_player_row(player_id: str, username: str) -> None:
 
 
 
-_VALID_STATS = {"avg_rt", "best_match_rt", "wins", "winrate"}
+_VALID_STATS = {"avg_rt", "best_match_rt", "wins", "winrate", "cheaters"}
 
 async def fetch_leaderboard(stat: str) -> list[dict]:
     queries = {
@@ -204,6 +204,7 @@ async def fetch_leaderboard(stat: str) -> list[dict]:
             )
             SELECT p.username, ROUND(AVG(pr.rt_ms)::numeric, 1) AS value
             FROM player_rts pr JOIN players p ON pr.player_id = p.id
+            WHERE p.cheat_flag_count = 0
             GROUP BY p.id, p.username
             HAVING COUNT(*) >= 3
             ORDER BY value ASC
@@ -211,20 +212,25 @@ async def fetch_leaderboard(stat: str) -> list[dict]:
         """),
         "best_match_rt": text("""
             WITH match_avgs AS (
-                SELECT m.p1_id AS player_id, AVG(r.p1_server_rt_compensated_ms) AS avg_rt
+                SELECT m.p1_id AS player_id,
+                       AVG(CASE WHEN r.p1_pre_click THEN 350.0
+                                ELSE r.p1_server_rt_compensated_ms END) AS avg_rt
                 FROM rounds r JOIN matches m ON r.match_id = m.id
-                WHERE r.p1_server_rt_compensated_ms IS NOT NULL AND NOT r.p1_pre_click
+                WHERE (r.p1_pre_click OR r.p1_server_rt_compensated_ms IS NOT NULL)
                   AND m.mode != 'practice'
                 GROUP BY m.id, m.p1_id
                 UNION ALL
-                SELECT m.p2_id AS player_id, AVG(r.p2_server_rt_compensated_ms) AS avg_rt
+                SELECT m.p2_id AS player_id,
+                       AVG(CASE WHEN r.p2_pre_click THEN 350.0
+                                ELSE r.p2_server_rt_compensated_ms END) AS avg_rt
                 FROM rounds r JOIN matches m ON r.match_id = m.id
-                WHERE r.p2_server_rt_compensated_ms IS NOT NULL AND NOT r.p2_pre_click
+                WHERE (r.p2_pre_click OR r.p2_server_rt_compensated_ms IS NOT NULL)
                   AND m.mode != 'practice'
                 GROUP BY m.id, m.p2_id
             )
             SELECT p.username, ROUND(MIN(ma.avg_rt)::numeric, 1) AS value
             FROM match_avgs ma JOIN players p ON ma.player_id = p.id
+            WHERE p.cheat_flag_count = 0
             GROUP BY p.id, p.username
             ORDER BY value ASC
             LIMIT 10
@@ -233,7 +239,7 @@ async def fetch_leaderboard(stat: str) -> list[dict]:
             SELECT p.username, COUNT(*) AS value
             FROM matches m
             JOIN players p ON m.winner_id = p.id
-            WHERE m.mode != 'practice'
+            WHERE m.mode != 'practice' AND p.cheat_flag_count = 0
             GROUP BY p.id, p.username
             ORDER BY value DESC
             LIMIT 10
@@ -245,18 +251,104 @@ async def fetch_leaderboard(stat: str) -> list[dict]:
                 SELECT p2_id AS player_id, winner_id FROM matches WHERE mode != 'practice'
             )
             SELECT p.username,
-                   ROUND(100.0 * COUNT(*) FILTER (WHERE pm.winner_id = pm.player_id) / COUNT(*), 1) AS value
+                   ROUND(100.0 * COUNT(*) FILTER (WHERE pm.winner_id = pm.player_id) / COUNT(*), 1) AS value,
+                   COUNT(*) FILTER (WHERE pm.winner_id = pm.player_id) AS wins,
+                   COUNT(*) AS total
             FROM player_matches pm
             JOIN players p ON pm.player_id = p.id
+            WHERE p.cheat_flag_count = 0
             GROUP BY p.id, p.username
-            HAVING COUNT(*) >= 2
+            HAVING COUNT(*) >= 5
             ORDER BY value DESC
             LIMIT 10
+        """),
+        "cheaters": text("""
+            WITH player_round_counts AS (
+                SELECT m.p1_id AS player_id, COUNT(r.id) AS n
+                FROM matches m JOIN rounds r ON r.match_id = m.id
+                GROUP BY m.p1_id
+                UNION ALL
+                SELECT m.p2_id AS player_id, COUNT(r.id) AS n
+                FROM matches m JOIN rounds r ON r.match_id = m.id
+                GROUP BY m.p2_id
+            ),
+            totals AS (
+                SELECT player_id, SUM(n) AS rounds_played
+                FROM player_round_counts GROUP BY player_id
+            )
+            SELECT p.username, p.cheat_flag_count AS value
+            FROM players p
+            LEFT JOIN totals t ON t.player_id = p.id
+            WHERE p.cheat_flag_count > 0
+            ORDER BY COALESCE(t.rounds_played, 0) DESC, p.cheat_flag_count DESC
+            LIMIT 25
         """),
     }
     async with AsyncSessionLocal() as session:
         result = await session.execute(queries[stat])
-        return [{"username": r.username, "value": float(r.value)} for r in result.fetchall()]
+        rows = result.fetchall()
+        if stat == "winrate":
+            return [{"username": r.username, "value": float(r.value),
+                     "wins": int(r.wins), "losses": int(r.total) - int(r.wins)} for r in rows]
+        return [{"username": r.username, "value": float(r.value)} for r in rows]
+
+
+async def fetch_recent_matches(limit: int = 20, player_id: Optional[str] = None) -> list[dict]:
+    where = "WHERE mode != 'practice'"
+    params: dict = {"limit": limit}
+    if player_id:
+        where += " AND (p1_id = :player_id OR p2_id = :player_id)"
+        params["player_id"] = player_id
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(text(f"""
+            WITH recent AS (
+                SELECT id, p1_username, p2_username, p1_final_score, p2_final_score,
+                       winner_id, p1_id, p2_id, started_at
+                FROM matches
+                {where}
+                ORDER BY started_at DESC
+                LIMIT :limit
+            )
+            SELECT m.id AS match_id, m.p1_username, m.p2_username,
+                   m.p1_final_score, m.p2_final_score,
+                   m.winner_id, m.p1_id, m.p2_id, m.started_at,
+                   r.round_num, r.winner_id AS round_winner_id,
+                   r.p1_server_rt_compensated_ms, r.p2_server_rt_compensated_ms,
+                   r.p1_pre_click, r.p2_pre_click
+            FROM recent m
+            LEFT JOIN rounds r ON r.match_id = m.id
+            ORDER BY m.started_at DESC, r.round_num ASC
+        """), params)
+        rows = result.fetchall()
+
+    matches_ordered: list[dict] = []
+    matches_map: dict[str, dict] = {}
+    for row in rows:
+        mid = row.match_id
+        if mid not in matches_map:
+            entry = {
+                "match_id": mid,
+                "p1_username": row.p1_username,
+                "p2_username": row.p2_username,
+                "p1_score": row.p1_final_score,
+                "p2_score": row.p2_final_score,
+                "winner_id": row.winner_id,
+                "p1_id": row.p1_id,
+                "p2_id": row.p2_id,
+                "rounds": [],
+            }
+            matches_map[mid] = entry
+            matches_ordered.append(entry)
+        if row.round_num is not None:
+            matches_map[mid]["rounds"].append({
+                "round_num": row.round_num,
+                "winner_id": row.round_winner_id,
+                "p1_rt_ms": row.p1_server_rt_compensated_ms,
+                "p2_rt_ms": row.p2_server_rt_compensated_ms,
+                "p1_pre_click": bool(row.p1_pre_click) if row.p1_pre_click is not None else False,
+                "p2_pre_click": bool(row.p2_pre_click) if row.p2_pre_click is not None else False,
+            })
+    return matches_ordered
 
 
 async def save_calibration(player: Player, rt_ms: float, side: str) -> None:
@@ -275,6 +367,18 @@ async def persist_match(match: Match, winner: Optional[Player]) -> None:
     winner_name = winner.username if winner else "none"
     print(f"[DB] Persisting match {match.match_id}, winner={winner_name}, rounds={len(match.round_log)}")
     async with AsyncSessionLocal() as session:
+        PRE_CLICK_PENALTY_MS = 350.0
+        p1_rts = [PRE_CLICK_PENALTY_MS if r.get("p1_pre_click")
+                  else r["p1_compensated_rt_ms"]
+                  for r in match.round_log
+                  if r.get("p1_pre_click") or r.get("p1_compensated_rt_ms") is not None]
+        p2_rts = [PRE_CLICK_PENALTY_MS if r.get("p2_pre_click")
+                  else r["p2_compensated_rt_ms"]
+                  for r in match.round_log
+                  if r.get("p2_pre_click") or r.get("p2_compensated_rt_ms") is not None]
+        p1_avg_rt = round(sum(p1_rts) / len(p1_rts), 1) if p1_rts else None
+        p2_avg_rt = round(sum(p2_rts) / len(p2_rts), 1) if p2_rts else None
+
         session.add(MatchRow(
             id=match.match_id,
             p1_id=match.p1.player_id, p2_id=match.p2.player_id,
@@ -291,6 +395,8 @@ async def persist_match(match: Match, winner: Optional[Player]) -> None:
             p2_screen_resolution=match.p2.screen_resolution,
             p1_client_version=match.p1.client_version,
             p2_client_version=match.p2.client_version,
+            p1_avg_rt_ms=p1_avg_rt,
+            p2_avg_rt_ms=p2_avg_rt,
         ))
         for r in match.round_log:
             session.add(RoundRow(
@@ -324,16 +430,20 @@ async def persist_match(match: Match, winner: Optional[Player]) -> None:
             ))
         p1_won = 1 if winner and winner.player_id == match.p1.player_id else 0
         p2_won = 1 if winner and winner.player_id == match.p2.player_id else 0
+        p1_cheats = sum(1 for r in match.round_log if r.get("p1_cheat_flag", False))
+        p2_cheats = sum(1 for r in match.round_log if r.get("p2_cheat_flag", False))
         await session.execute(
             update(PlayerRow).where(PlayerRow.id == match.p1.player_id).values(
                 matches_played=PlayerRow.matches_played + 1,
                 matches_won=PlayerRow.matches_won + p1_won,
+                cheat_flag_count=PlayerRow.cheat_flag_count + p1_cheats,
             )
         )
         await session.execute(
             update(PlayerRow).where(PlayerRow.id == match.p2.player_id).values(
                 matches_played=PlayerRow.matches_played + 1,
                 matches_won=PlayerRow.matches_won + p2_won,
+                cheat_flag_count=PlayerRow.cheat_flag_count + p2_cheats,
             )
         )
         await session.commit()
@@ -435,7 +545,9 @@ async def run_round(match: Match) -> Optional[Player]:
 
     delay_s = random.uniform(MIN_DELAY_S, MAX_DELAY_S)
     if match.round_num == 1:
-        delay_s += 2.0  # extra buffer for the "Name vs Name" intro overlay
+        # Client spends 2s on the matchmaking screen, then shows a 2s intro overlay,
+        # then waits an additional 2s. Total client overhead = 6s from round_prepare.
+        delay_s += 4.0
 
     for p in (p1, p2):
         await safe_send(p.websocket, {"type": "round_prepare", "round_num": match.round_num})
@@ -477,6 +589,11 @@ async def run_round(match: Match) -> Optional[Player]:
 
     await asyncio.gather(_update_latency(p1), _update_latency(p2))
 
+    # Give click_info (mouseup) messages time to arrive before logging.
+    # click is sent on mousedown; click_info is sent on mouseup (~50-150ms later).
+    # Without this wait the round is logged before mouseup arrives → null duration.
+    await asyncio.sleep(0.25)
+
     # Raw server-measured RT (network latency included).
     def _raw(p: Player) -> Optional[float]:
         return None if p.click_received_us is None else (p.click_received_us - t_stimulus) / 1000.0
@@ -500,14 +617,27 @@ async def run_round(match: Match) -> Optional[Player]:
         p2_eff = p2_compensated
 
     def is_valid(p: Player, rt: Optional[float]) -> bool:
-        return not p.pre_clicked and rt is not None and rt >= HUMAN_FLOOR_MS
+        return not p.pre_clicked and rt is not None
 
     p1_ok, p2_ok = is_valid(p1, p1_eff), is_valid(p2, p2_eff)
-    if p1_ok and p2_ok:
-        round_winner = p1 if p1_eff < p2_eff else p2
-    elif p1_ok: round_winner = p1
-    elif p2_ok: round_winner = p2
-    else: round_winner = None
+
+    # Cheat detection: click held shorter than a human physically can (~10 ms)
+    p1_cheat = p1.click_duration_ms is not None and p1.click_duration_ms < CHEAT_DURATION_MS
+    p2_cheat = p2.click_duration_ms is not None and p2.click_duration_ms < CHEAT_DURATION_MS
+
+    if p1_cheat or p2_cheat:
+        if p1_cheat and p2_cheat:
+            round_winner = None
+        elif p1_cheat:
+            round_winner = p2 if p2_ok else None
+        else:
+            round_winner = p1 if p1_ok else None
+    else:
+        if p1_ok and p2_ok:
+            round_winner = p1 if p1_eff < p2_eff else p2
+        elif p1_ok: round_winner = p1
+        elif p2_ok: round_winner = p2
+        else: round_winner = None
 
     if round_winner: round_winner.wins += 1
 
@@ -542,6 +672,8 @@ async def run_round(match: Match) -> Optional[Player]:
         "p2_rtt_ms_round": round(p2.one_way_latency_ms * 2, 3),
         "p1_click_duration_ms": p1.click_duration_ms,
         "p2_click_duration_ms": p2.click_duration_ms,
+        "p1_cheat_flag": p1_cheat,
+        "p2_cheat_flag": p2_cheat,
         "p1_mouse_distance_5s_px": p1.mouse_distance_5s_px,
         "p2_mouse_distance_5s_px": p2.mouse_distance_5s_px,
         "p1_time_since_mouse_move_ms": p1.time_since_mouse_move_ms,
@@ -551,13 +683,19 @@ async def run_round(match: Match) -> Optional[Player]:
     })
 
     for p, opp in [(p1, p2), (p2, p1)]:
+        p_cheat   = p1_cheat if p is p1 else p2_cheat
+        opp_cheat = p2_cheat if p is p1 else p1_cheat
+        p_rt      = p1_eff   if p is p1 else p2_eff
+        opp_rt    = p2_eff   if p is p1 else p1_eff
         await safe_send(p.websocket, {
             "type": "round_result",
             "round_num": match.round_num,
-            "your_rt_ms": p.client_reported_rt_ms,
-            "opponent_rt_ms": opp.client_reported_rt_ms,
+            "your_rt_ms": p_rt,
+            "opponent_rt_ms": opp_rt,
             "opponent_pre_click": opp.pre_clicked,
             "you_won_round": round_winner is p,
+            "you_cheated": p_cheat,
+            "opponent_cheated": opp_cheat,
             "your_score": p.wins,
             "opponent_score": opp.wins,
         })
@@ -706,6 +844,19 @@ async def ws_play(websocket: WebSocket) -> None:
                 side = msg.get("side", "unknown")
                 if rt_ms is not None and 50.0 <= float(rt_ms) <= 2000.0:
                     asyncio.create_task(save_calibration(player, float(rt_ms), side))
+
+            elif mtype == "recent_matches_request":
+                pid = msg.get("player_id") or None
+                try:
+                    matches = await fetch_recent_matches(player_id=pid)
+                except Exception as e:
+                    print(f"[RECENT_MATCHES] Query failed: {e}")
+                    matches = []
+                await safe_send(websocket, {
+                    "type": "recent_matches_data",
+                    "player_id": pid or "",
+                    "matches": matches,
+                })
 
             elif mtype == "leaderboard_request":
                 stat = msg.get("stat", "avg_rt")

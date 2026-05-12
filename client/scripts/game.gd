@@ -54,7 +54,6 @@ var _end_right_lbl: Label
 
 func _ready() -> void:
 	_build_ui()
-	Net.send_client_info()
 
 	var md: Dictionary = Net.last_match_start
 	current_mode = md.get("mode", "ranked")
@@ -315,6 +314,7 @@ func _dismiss_intro() -> void:
 # ── Signal handlers ───────────────────────────────────────────────────────────
 
 func _on_round_prepare(round_num: int) -> void:
+	Net.send_client_info()  # refresh Hz and hardware info every round
 	state = State.WAITING
 	countdown_timer.stop()
 	ready_lbl.add_theme_font_size_override("font_size", 22)
@@ -326,7 +326,9 @@ func _on_round_prepare(round_num: int) -> void:
 	opp_box.color = COL_WAITING
 	# Show "Name vs Name" intro before round 1 of every match (fresh and rematch)
 	if round_num == 1:
-		_show_vs_intro()
+		await _show_vs_intro()
+		# extra 2s buffer so the boxes don't go live the instant the intro fades
+		await get_tree().create_timer(2.0).timeout
 
 
 func _show_vs_intro() -> void:
@@ -347,25 +349,38 @@ func _on_stimulus(_t: int) -> void:
 
 func _on_opponent_clicked(pre_click: bool) -> void:
 	if state in [State.STIMULUS, State.AFTER_CLICK, State.WAITING]:
-		opp_box.color = COL_LOSE if pre_click else COL_SENT
+		if pre_click:
+			opp_box.color   = COL_LOSE
+			opp_rt_lbl.text = "Too early!"
+		else:
+			opp_box.color = COL_SENT
 
 
 func _on_round_result(data: Dictionary) -> void:
 	my_score  = data.get("your_score", my_score)
 	opp_score = data.get("opponent_score", opp_score)
-	var i_won: bool     = data.get("you_won_round", false)
-	var opp_pre: bool   = data.get("opponent_pre_click", false)
+	var i_won: bool       = data.get("you_won_round", false)
+	var opp_pre: bool     = data.get("opponent_pre_click", false)
+	var i_cheated: bool   = data.get("you_cheated", false)
+	var opp_cheated: bool = data.get("opponent_cheated", false)
 
-	my_box.color = COL_WIN if i_won else COL_LOSE
+	if i_cheated:
+		my_box.color   = COL_LOSE
+		my_rt_lbl.text = "CHEATER!"
+	else:
+		my_box.color   = COL_WIN if i_won else COL_LOSE
+		my_rt_lbl.text = _fmt(data.get("your_rt_ms"))
 
-	if opp_pre:
+	if opp_cheated:
+		opp_box.color   = COL_LOSE
+		opp_rt_lbl.text = "CHEATER!"
+	elif opp_pre:
 		opp_box.color   = COL_LOSE
 		opp_rt_lbl.text = "Too early!"
 	else:
 		opp_box.color   = COL_LOSE if i_won else COL_WIN
 		opp_rt_lbl.text = _fmt(data.get("opponent_rt_ms"))
 
-	my_rt_lbl.text = _fmt(data.get("your_rt_ms"))
 	_refresh_scores()
 	_enter_ready_up()
 
