@@ -1,0 +1,17 @@
+[gd_scene format=3 uid="uid://c3yy1dkpq08au"]
+
+[ext_resource type="Script" uid="uid://game2v2script001" path="res://scripts/game_2v2.gd" id="1_g2v2"]
+
+[node name="Game2v2" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_g2v2")
+
+[node name="CountdownTimer" type="Timer" parent="."]
+wait_time = 1.0
+
+[node name="EndTimer" type="Timer" parent="."]
+wait_time = 3.0
+one_shot = true

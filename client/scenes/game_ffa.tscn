@@ -1,0 +1,17 @@
+[gd_scene format=3 uid="uid://c3ch8dkpq08au"]
+
+[ext_resource type="Script" path="res://scripts/game_ffa.gd" id="1_gffa"]
+
+[node name="GameFFA" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_gffa")
+
+[node name="CountdownTimer" type="Timer" parent="."]
+wait_time = 1.0
+
+[node name="EndTimer" type="Timer" parent="."]
+wait_time = 2.0
+one_shot = true

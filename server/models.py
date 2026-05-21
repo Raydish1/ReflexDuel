@@ -52,8 +52,9 @@ class Match(Base):
         ForeignKey("players.id"), nullable=True
     )
 
-    mode: Mapped[str] = mapped_column(String(16), default="ranked")  # ranked / private
+    mode: Mapped[str] = mapped_column(String(16), default="ranked")  # ranked / practice / private
     room_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    is_auditory: Mapped[bool] = mapped_column(Boolean, default=False)
 
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -150,7 +151,215 @@ class Round(Base):
     p1_window_focused: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     p2_window_focused: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
+    # Cursor position at click time (viewport pixels — bot detection)
+    p1_click_pos_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p1_click_pos_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p2_click_pos_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p2_click_pos_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Cursor displacement in 100ms before click (px) — snap detection
+    p1_pre_click_displacement_px: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p2_pre_click_displacement_px: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     match: Mapped["Match"] = relationship("Match", back_populates="rounds")
+
+
+class TeamMatch(Base):
+    """One 2v2 match between two teams of two players each."""
+    __tablename__ = "team_matches"
+
+    id: Mapped[str] = mapped_column(String(16), primary_key=True)
+
+    t1_p1_id: Mapped[str] = mapped_column(ForeignKey("players.id"), nullable=False)
+    t1_p2_id: Mapped[str] = mapped_column(ForeignKey("players.id"), nullable=False)
+    t2_p1_id: Mapped[str] = mapped_column(ForeignKey("players.id"), nullable=False)
+    t2_p2_id: Mapped[str] = mapped_column(ForeignKey("players.id"), nullable=False)
+
+    t1_p1_username: Mapped[str] = mapped_column(String(32), nullable=False)
+    t1_p2_username: Mapped[str] = mapped_column(String(32), nullable=False)
+    t2_p1_username: Mapped[str] = mapped_column(String(32), nullable=False)
+    t2_p2_username: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    winner_team: Mapped[int] = mapped_column(Integer, default=0)  # 0=none, 1=team1, 2=team2
+    t1_score: Mapped[int] = mapped_column(Integer, default=0)
+    t2_score: Mapped[int] = mapped_column(Integer, default=0)
+    is_auditory: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    rounds: Mapped[list["TeamRound"]] = relationship(
+        "TeamRound", back_populates="match", cascade="all, delete-orphan"
+    )
+
+
+class TeamRound(Base):
+    """One round of a 2v2 match."""
+    __tablename__ = "team_rounds"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    match_id: Mapped[str] = mapped_column(
+        ForeignKey("team_matches.id", ondelete="CASCADE"), nullable=False
+    )
+    round_num: Mapped[int] = mapped_column(Integer, nullable=False)
+    t_stimulus_us: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    delay_s: Mapped[float] = mapped_column(Float, nullable=False)
+
+    # Individual compensated RTs (null = player missed/pre-clicked — see pre_click flags)
+    t1_p1_rt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t1_p2_rt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t2_p1_rt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t2_p2_rt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Raw (uncompensated) server-measured RTs
+    t1_p1_rt_raw_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t1_p2_rt_raw_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t2_p1_rt_raw_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t2_p2_rt_raw_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Client-reported RTs (untrusted, for cross-check)
+    t1_p1_client_rt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t1_p2_client_rt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t2_p1_client_rt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t2_p2_client_rt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # RTT measured this round via stimulus ping/pong
+    t1_p1_rtt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t1_p2_rtt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t2_p1_rtt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t2_p2_rtt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    t1_p1_pre_click: Mapped[bool] = mapped_column(Boolean, default=False)
+    t1_p2_pre_click: Mapped[bool] = mapped_column(Boolean, default=False)
+    t2_p1_pre_click: Mapped[bool] = mapped_column(Boolean, default=False)
+    t2_p2_pre_click: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Anti-cheat behavioral features (client-reported, nullable)
+    t1_p1_click_duration_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t1_p2_click_duration_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t2_p1_click_duration_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t2_p2_click_duration_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    t1_p1_mouse_distance_5s_px: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t1_p2_mouse_distance_5s_px: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t2_p1_mouse_distance_5s_px: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t2_p2_mouse_distance_5s_px: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    t1_p1_time_since_mouse_move_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t1_p2_time_since_mouse_move_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t2_p1_time_since_mouse_move_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t2_p2_time_since_mouse_move_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    t1_p1_window_focused: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    t1_p2_window_focused: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    t2_p1_window_focused: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    t2_p2_window_focused: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+
+    # Cursor position at click time (viewport pixels — bot detection)
+    t1_p1_click_pos_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t1_p1_click_pos_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t1_p2_click_pos_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t1_p2_click_pos_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t2_p1_click_pos_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t2_p1_click_pos_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t2_p2_click_pos_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t2_p2_click_pos_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Cursor displacement in 100ms before click (px) — snap detection
+    t1_p1_pre_click_displacement_px: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t1_p2_pre_click_displacement_px: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t2_p1_pre_click_displacement_px: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t2_p2_pre_click_displacement_px: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Combined team RTs (pre-click=350ms penalty, missed=5000ms penalty)
+    t1_combined_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    t2_combined_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    winner_team: Mapped[int] = mapped_column(Integer, default=0)
+
+    match: Mapped["TeamMatch"] = relationship("TeamMatch", back_populates="rounds")
+
+
+class FFAMatch(Base):
+    """One Free-For-All match with 4 individual players."""
+    __tablename__ = "ffa_matches"
+
+    id: Mapped[str] = mapped_column(String(16), primary_key=True)
+
+    p1_id: Mapped[str] = mapped_column(ForeignKey("players.id"), nullable=False)
+    p2_id: Mapped[str] = mapped_column(ForeignKey("players.id"), nullable=False)
+    p3_id: Mapped[str] = mapped_column(ForeignKey("players.id"), nullable=False)
+    p4_id: Mapped[str] = mapped_column(ForeignKey("players.id"), nullable=False)
+
+    p1_username: Mapped[str] = mapped_column(String(32), nullable=False)
+    p2_username: Mapped[str] = mapped_column(String(32), nullable=False)
+    p3_username: Mapped[str] = mapped_column(String(32), nullable=False)
+    p4_username: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    p1_score: Mapped[int] = mapped_column(Integer, default=0)
+    p2_score: Mapped[int] = mapped_column(Integer, default=0)
+    p3_score: Mapped[int] = mapped_column(Integer, default=0)
+    p4_score: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Final placement (1-4); 0 = not yet determined
+    p1_placement: Mapped[int] = mapped_column(Integer, default=0)
+    p2_placement: Mapped[int] = mapped_column(Integer, default=0)
+    p3_placement: Mapped[int] = mapped_column(Integer, default=0)
+    p4_placement: Mapped[int] = mapped_column(Integer, default=0)
+
+    winner_id: Mapped[str | None] = mapped_column(ForeignKey("players.id"), nullable=True)
+    is_auditory: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    rounds: Mapped[list["FFARound"]] = relationship(
+        "FFARound", back_populates="match", cascade="all, delete-orphan"
+    )
+
+
+class FFARound(Base):
+    """One round of an FFA match."""
+    __tablename__ = "ffa_rounds"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    match_id: Mapped[str] = mapped_column(
+        ForeignKey("ffa_matches.id", ondelete="CASCADE"), nullable=False
+    )
+    round_num: Mapped[int] = mapped_column(Integer, nullable=False)
+    t_stimulus_us: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    delay_s: Mapped[float] = mapped_column(Float, nullable=False)
+
+    # Server-measured compensated RTs (null = miss/pre-click)
+    p1_rt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p2_rt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p3_rt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p4_rt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Raw (uncompensated)
+    p1_rt_raw_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p2_rt_raw_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p3_rt_raw_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p4_rt_raw_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Pre-click flags
+    p1_pre_click: Mapped[bool] = mapped_column(Boolean, default=False)
+    p2_pre_click: Mapped[bool] = mapped_column(Boolean, default=False)
+    p3_pre_click: Mapped[bool] = mapped_column(Boolean, default=False)
+    p4_pre_click: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # RTT per player this round
+    p1_rtt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p2_rtt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p3_rtt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p4_rtt_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Round winner (slot 1-4, 0 = no winner)
+    winner_slot: Mapped[int] = mapped_column(Integer, default=0)
+
+    match: Mapped["FFAMatch"] = relationship("FFAMatch", back_populates="rounds")
 
 
 class CalibrationRound(Base):

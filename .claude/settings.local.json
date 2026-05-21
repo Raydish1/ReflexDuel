@@ -24,7 +24,23 @@
       "PowerShell(cd C:\\\\Users\\\\Rayha\\\\Documents\\\\ReflexDuel\\\\ReflexDuel\\\\server; $env:DATABASE_URL = \"postgresql+asyncpg://postgres:xUb7tDbFM2lHek13@db.mjnmlhesztypcvofkwxj.supabase.co:5432/postgres\"; python backfill_match_avg_rt.py --dry-run)",
       "PowerShell(cd C:\\\\Users\\\\Rayha\\\\Documents\\\\ReflexDuel\\\\ReflexDuel\\\\server; $env:DATABASE_URL = \"postgresql+asyncpg://postgres:xUb7tDbFM2lHek13@db.mjnmlhesztypcvofkwxj.supabase.co:5432/postgres\"; python backfill_match_avg_rt.py)",
       "PowerShell(cd C:\\\\Users\\\\Rayha\\\\Documents\\\\ReflexDuel\\\\ReflexDuel\\\\server; $env:DATABASE_URL = \"postgresql+asyncpg://postgres:xUb7tDbFM2lHek13@db.mjnmlhesztypcvofkwxj.supabase.co:5432/postgres\"; python check_player.py b549d72c-64c)",
-      "PowerShell(cd C:\\\\Users\\\\Rayha\\\\Documents\\\\ReflexDuel\\\\ReflexDuel\\\\server; $env:DATABASE_URL = \"postgresql+asyncpg://postgres:xUb7tDbFM2lHek13@db.mjnmlhesztypcvofkwxj.supabase.co:5432/postgres\"; python debug_leaderboard.py)"
+      "PowerShell(cd C:\\\\Users\\\\Rayha\\\\Documents\\\\ReflexDuel\\\\ReflexDuel\\\\server; $env:DATABASE_URL = \"postgresql+asyncpg://postgres:xUb7tDbFM2lHek13@db.mjnmlhesztypcvofkwxj.supabase.co:5432/postgres\"; python debug_leaderboard.py)",
+      "PowerShell(cd \"c:\\\\Users\\\\Rayha\\\\Documents\\\\ReflexDuel\\\\ReflexDuel\\\\server\"; $env:ALEMBIC_DATABASE_URL=\"postgresql+psycopg2://postgres.mjnmlhesztypcvofkwxj:xUb7tDbFM2lHek13@aws-1-us-east-2.pooler.supabase.com:5432/postgres\"; python -m alembic upgrade head)",
+      "PowerShell(cd \"c:\\\\Users\\\\Rayha\\\\Documents\\\\ReflexDuel\\\\ReflexDuel\\\\server\"; $env:DATABASE_URL=\"postgresql+asyncpg://postgres.mjnmlhesztypcvofkwxj:xUb7tDbFM2lHek13@aws-1-us-east-2.pooler.supabase.com:5432/postgres\"; python check_rrre.py)",
+      "Bash(python fix_ema_latency.py --dry-run --username RRRE)",
+      "Bash(DATABASE_URL=\"postgresql+asyncpg://postgres.mjnmlhesztypcvofkwxj:xUb7tDbFM2lHek13@aws-1-us-east-2.pooler.supabase.com:5432/postgres\" python fix_ema_latency.py --dry-run --username RRRE)",
+      "Bash(DATABASE_URL=\"postgresql+asyncpg://postgres.mjnmlhesztypcvofkwxj:xUb7tDbFM2lHek13@aws-1-us-east-2.pooler.supabase.com:5432/postgres\" python -c \"import os; from dotenv import load_dotenv; from pathlib import Path; load_dotenv\\(Path\\('.env'\\)\\); print\\(os.environ.get\\('DATABASE_URL','MISSING'\\)\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(DATABASE_URL=\"postgresql+asyncpg://postgres.mjnmlhesztypcvofkwxj:xUb7tDbFM2lHek13@aws-1-us-east-2.pooler.supabase.com:5432/postgres\" python fix_ema_latency.py --username RRRE)",
+      "Bash(ALEMBIC_DATABASE_URL=\"postgresql+psycopg2://postgres.mjnmlhesztypcvofkwxj:xUb7tDbFM2lHek13@aws-1-us-east-2.pooler.supabase.com:5432/postgres\" alembic upgrade head)",
+      "Bash(DATABASE_URL=\"postgresql+psycopg2://postgres.mjnmlhesztypcvofkwxj:xUb7tDbFM2lHek13@aws-1-us-east-2.pooler.supabase.com:5432/postgres\" python delete_player.py gentlebrawlers)",
+      "Bash(DATABASE_URL=\"postgresql+psycopg2://postgres.mjnmlhesztypcvofkwxj:xUb7tDbFM2lHek13@aws-1-us-east-2.pooler.supabase.com:5432/postgres\" python delete_player.py gentlebrawlers --confirm)",
+      "Bash(alembic upgrade *)",
+      "mcp__godot-ai__logs_read",
+      "mcp__godot-ai__editor_manage",
+      "Bash(python -m alembic current)",
+      "Bash(findstr /i \"database\\\\|supabase\\\\|postgres\\\\|alembic\")",
+      "PowerShell(cd \"c:\\\\Users\\\\Rayha\\\\Documents\\\\ReflexDuel\\\\ReflexDuel\\\\server\"; $env:ALEMBIC_DATABASE_URL=\"postgresql+psycopg2://postgres.mjnmlhesztypcvofkwxj:xUb7tDbFM2lHek13@aws-1-us-east-2.pooler.supabase.com:5432/postgres\"; python -m alembic upgrade head 2>&1)"
     ]
   }
 }

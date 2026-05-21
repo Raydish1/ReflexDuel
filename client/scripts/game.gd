@@ -14,6 +14,8 @@ var opponent_username: String = "?"
 var _countdown: int = 5
 var _readied: bool = false
 var current_mode: String = "ranked"
+var is_auditory: bool = false
+var _beep_player: AudioStreamPlayer = null
 
 # Anti-cheat instrumentation
 var _mouse_pos_history: Array = []   # Array of [timestamp_us: int, pos: Vector2]
@@ -57,11 +59,17 @@ func _ready() -> void:
 
 	var md: Dictionary = Net.last_match_start
 	current_mode = md.get("mode", "ranked")
+	is_auditory = md.get("is_auditory", false)
 	my_username = Net.username
 	opponent_username = md.get("opponent_username", "?")
 	_refresh_names()
 	_refresh_scores()
 	_set_mode_label()
+
+	if is_auditory:
+		_beep_player = AudioStreamPlayer.new()
+		_beep_player.stream = _make_beep()
+		add_child(_beep_player)
 
 	countdown_timer.timeout.connect(_on_countdown_tick)
 	end_timer.timeout.connect(_go_to_results)
@@ -277,6 +285,29 @@ func _build_ui() -> void:
 	end_overlay.add_child(_end_right_lbl)
 
 
+func _make_beep() -> AudioStreamWAV:
+	const SAMPLE_RATE := 44100
+	const FREQ := 880.0
+	const DURATION_S := 0.12
+	var num_samples := int(SAMPLE_RATE * DURATION_S)
+	var bytes := PackedByteArray()
+	bytes.resize(num_samples * 2)
+	for i in num_samples:
+		var t := float(i) / float(SAMPLE_RATE)
+		var fade := 1.0
+		if i > num_samples - 882:  # 20ms fade-out
+			fade = float(num_samples - i) / 882.0
+		var sample := int(clampf(sin(TAU * FREQ * t) * fade * 32767.0, -32768.0, 32767.0))
+		bytes[i * 2]     = sample & 0xFF
+		bytes[i * 2 + 1] = (sample >> 8) & 0xFF
+	var wav := AudioStreamWAV.new()
+	wav.data = bytes
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = SAMPLE_RATE
+	wav.stereo = false
+	return wav
+
+
 func _lbl(sz: int) -> Label:
 	var l := Label.new()
 	l.add_theme_font_size_override("font_size", sz)
@@ -296,7 +327,10 @@ func _refresh_scores() -> void:
 	opp_score_lbl.text = str(opp_score)
 
 func _set_mode_label() -> void:
-	if current_mode == "practice":
+	if is_auditory:
+		mode_lbl.text = "AUDITORY"
+		mode_lbl.add_theme_color_override("font_color", Color(0.72, 0.45, 1.0))
+	elif current_mode == "practice":
 		mode_lbl.text = "PRACTICE"
 		mode_lbl.add_theme_color_override("font_color", Color(0.97, 0.68, 0.05))
 	else:
@@ -343,8 +377,12 @@ func _on_stimulus(_t: int) -> void:
 	_dismiss_intro()
 	state = State.STIMULUS
 	t_stimulus_us = Time.get_ticks_usec()
-	my_box.color  = COL_GO
-	opp_box.color = COL_GO
+	if is_auditory:
+		if _beep_player != null:
+			_beep_player.play()
+	else:
+		my_box.color  = COL_GO
+		opp_box.color = COL_GO
 
 
 func _on_opponent_clicked(pre_click: bool) -> void:
@@ -368,8 +406,7 @@ func _on_round_result(data: Dictionary) -> void:
 		my_box.color   = COL_LOSE
 		my_rt_lbl.text = "CHEATER!"
 	else:
-		my_box.color   = COL_WIN if i_won else COL_LOSE
-		my_rt_lbl.text = _fmt(data.get("your_rt_ms"))
+		my_box.color = COL_WIN if i_won else COL_LOSE
 
 	if opp_cheated:
 		opp_box.color   = COL_LOSE
@@ -474,6 +511,21 @@ func _time_since_move_ms() -> float:
 	return (Time.get_ticks_usec() - _last_mouse_move_us) / 1000.0
 
 
+func _pre_click_displacement_px() -> float:
+	var now_us := Time.get_ticks_usec()
+	var cutoff := now_us - 100_000  # 100 ms window
+	var dist := 0.0
+	var has_prev := false
+	var prev := Vector2.ZERO
+	for entry in _mouse_pos_history:
+		if (entry[0] as int) >= cutoff:
+			if has_prev:
+				dist += (entry[1] as Vector2).distance_to(prev)
+			has_prev = true
+			prev = entry[1]
+	return dist
+
+
 # ── Input ─────────────────────────────────────────────────────────────────────
 
 func _input(event: InputEvent) -> void:
@@ -502,6 +554,10 @@ func _input(event: InputEvent) -> void:
 			_mouse_down_us = 0
 		return
 
+	# Ignore clicks while the intro overlay is showing
+	if intro_overlay.visible:
+		return
+
 	# mousedown — record time for duration tracking
 	_mouse_down_us = Time.get_ticks_usec()
 
@@ -509,10 +565,13 @@ func _input(event: InputEvent) -> void:
 		State.STIMULUS:
 			state = State.AFTER_CLICK
 			var rt := (Time.get_ticks_usec() - t_stimulus_us) / 1000.0
-			Net.send_click(rt, false, _mouse_dist_5s(), _time_since_move_ms(), _window_focused_at_stimulus)
+			my_rt_lbl.text = "%.1f ms" % rt
+			var _mpos := (event as InputEventMouseButton).position
+			Net.send_click(rt, false, _mouse_dist_5s(), _time_since_move_ms(), _window_focused_at_stimulus, _mpos.x, _mpos.y, _pre_click_displacement_px())
 			my_box.color = COL_SENT
 		State.WAITING:
-			Net.send_click(0.0, true, _mouse_dist_5s(), _time_since_move_ms(), get_window().has_focus())
+			var _mpos_pre := (event as InputEventMouseButton).position
+			Net.send_click(0.0, true, _mouse_dist_5s(), _time_since_move_ms(), get_window().has_focus(), _mpos_pre.x, _mpos_pre.y, _pre_click_displacement_px())
 			my_box.color = COL_LOSE
 			ready_lbl.add_theme_font_size_override("font_size", 40)
 			ready_lbl.text = "FAIL!"
